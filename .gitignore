@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# Uploaded images (tracked via .gitkeep)
+uploads/*
+!uploads/.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store

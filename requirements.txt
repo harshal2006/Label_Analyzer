@@ -1,0 +1,26 @@
+# ============================================================
+# Nutrition Label Analyzer – Python Dependencies
+# ============================================================
+# Core framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+
+# Database
+sqlalchemy==2.0.41
+psycopg2-binary==2.9.10
+
+# Google Cloud Vision OCR
+google-cloud-vision==3.10.0
+
+# Validation & serialization
+pydantic==2.11.3
+
+# Environment variables
+python-dotenv==1.1.0
+
+# File upload support (included with FastAPI, listed for clarity)
+python-multipart==0.0.20
+
+# Streamlit UI
+streamlit>=1.45.0
+requests>=2.32.0
