@@ -2,7 +2,7 @@
 Upload router – ``POST /upload``
 
 Accepts a multipart image upload, persists it to disk, runs OCR via
-Google Cloud Vision, and stores the results in PostgreSQL.
+PaddleOCR, and stores the results in the database.
 """
 
 import logging
@@ -45,8 +45,8 @@ async def upload_image(
     --------
     1. Validate the file extension.
     2. Save the image to ``uploads/`` with a UUID filename.
-    3. Create an ``Upload`` record in PostgreSQL.
-    4. Run Google Vision OCR on the saved image.
+    3. Create an ``Upload`` record in the database.
+    4. Run PaddleOCR on the saved image.
     5. Create an ``AnalysisResult`` record with the extracted text.
     6. Return a success response containing the OCR text.
     """

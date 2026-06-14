@@ -229,7 +229,7 @@ def check_backend_health() -> bool:
 def upload_image(file_bytes: bytes, filename: str) -> dict:
     """POST the image to the FastAPI /upload endpoint."""
     files = {"file": (filename, file_bytes)}
-    resp = requests.post(UPLOAD_ENDPOINT, files=files, timeout=30)
+    resp = requests.post(UPLOAD_ENDPOINT, files=files, timeout=120)
     resp.raise_for_status()
     return resp.json()
 

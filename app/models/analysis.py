@@ -8,8 +8,7 @@ nullable placeholders for Week 2+ features.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,7 +27,7 @@ class AnalysisResult(Base):
     )
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    analysis_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

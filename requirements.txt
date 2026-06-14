@@ -7,10 +7,10 @@ uvicorn[standard]==0.34.3
 
 # Database
 sqlalchemy==2.0.41
-psycopg2-binary==2.9.10
 
-# Google Cloud Vision OCR
-google-cloud-vision==3.10.0
+# OCR – PaddleOCR (free, local, open-source)
+paddlepaddle>=3.0.0
+paddleocr>=2.9.0
 
 # Validation & serialization
 pydantic==2.11.3
