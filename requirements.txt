@@ -15,6 +15,10 @@ paddleocr>=2.9.0
 # Validation & serialization
 pydantic==2.11.3
 
+# LLM ingredient analysis
+groq>=0.25.0
+
+
 # Environment variables
 python-dotenv==1.1.0
 

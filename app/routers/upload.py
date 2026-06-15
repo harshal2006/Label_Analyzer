@@ -2,7 +2,8 @@
 Upload router – ``POST /upload``
 
 Accepts a multipart image upload, persists it to disk, runs OCR via
-PaddleOCR, and stores the results in the database.
+PaddleOCR, analyzes ingredients via Groq LLM, and stores the results
+in the database.
 """
 
 import logging
@@ -13,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.analysis import AnalysisResult
 from app.models.upload import Upload
-from app.schemas.upload import ErrorResponse, UploadResponse
-from app.services import ocr_service, storage_service
+from app.schemas.upload import ErrorResponse, IngredientAnalysis, UploadResponse
+from app.services import analysis_service, ocr_service, storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ router = APIRouter(tags=["Upload"])
     summary="Upload a nutrition-label image",
     description=(
         "Upload a JPG, JPEG, PNG, or WebP image of a nutrition label. "
-        "The server stores the image, runs OCR, and returns the extracted text."
+        "The server stores the image, runs OCR, analyzes ingredients via "
+        "Groq LLM, and returns the extracted text with analysis."
     ),
     responses={
         400: {"model": ErrorResponse, "description": "Invalid file type"},
@@ -39,7 +41,7 @@ async def upload_image(
     file: UploadFile = File(..., description="Nutrition-label image file"),
     db: Session = Depends(get_db),
 ) -> UploadResponse:
-    """Handle an image upload and return OCR results.
+    """Handle an image upload and return OCR + analysis results.
 
     Workflow
     --------
@@ -47,8 +49,9 @@ async def upload_image(
     2. Save the image to ``uploads/`` with a UUID filename.
     3. Create an ``Upload`` record in the database.
     4. Run PaddleOCR on the saved image.
-    5. Create an ``AnalysisResult`` record with the extracted text.
-    6. Return a success response containing the OCR text.
+    5. Run Groq LLM ingredient analysis on the OCR text.
+    6. Create an ``AnalysisResult`` record with the extracted text and analysis.
+    7. Return a success response containing the OCR text, nutrients, and analysis.
     """
 
     # ------------------------------------------------------------------
@@ -94,8 +97,11 @@ async def upload_image(
     # 4. Run OCR
     # ------------------------------------------------------------------
     ocr_text: str = ""
+    nutrients: list[dict] = []
     try:
-        ocr_text = ocr_service.extract_text(image_path)
+        ocr_result = ocr_service.extract_text(image_path)
+        ocr_text = ocr_result["ocr_text"]
+        nutrients = ocr_result["nutrients"]
     except FileNotFoundError as exc:
         logger.exception("Image file not found for OCR")
         raise HTTPException(
@@ -110,12 +116,34 @@ async def upload_image(
         )
 
     # ------------------------------------------------------------------
-    # 5. Persist analysis result
+    # 5. Run Groq LLM ingredient analysis
+    # ------------------------------------------------------------------
+    analysis_data: dict | None = None
+    analysis_obj: IngredientAnalysis | None = None
+    try:
+        analysis_data = analysis_service.analyze_ingredients(ocr_text)
+        if analysis_data is not None:
+            analysis_obj = IngredientAnalysis(**analysis_data)
+    except Exception as exc:
+        logger.exception("Ingredient analysis failed (non-fatal): %s", exc)
+        # Analysis failure is non-fatal — we still return OCR results
+
+    # ------------------------------------------------------------------
+    # 6. Persist analysis result
     # ------------------------------------------------------------------
     try:
         analysis_record = AnalysisResult(
             upload_id=upload_record.id,
             ocr_text=ocr_text,
+            health_score=(
+                float(analysis_data["overall_health_score"])
+                if analysis_data and "overall_health_score" in analysis_data
+                else None
+            ),
+            analysis_json={
+                "nutrients": nutrients,
+                "analysis": analysis_data,
+            },
         )
         db.add(analysis_record)
         db.commit()
@@ -128,11 +156,13 @@ async def upload_image(
         )
 
     # ------------------------------------------------------------------
-    # 6. Return response
+    # 7. Return response
     # ------------------------------------------------------------------
     return UploadResponse(
         success=True,
         upload_id=upload_record.id,
         image_path=image_path,
         ocr_text=ocr_text,
+        nutrients=nutrients,
+        analysis=analysis_obj,
     )

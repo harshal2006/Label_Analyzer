@@ -6,6 +6,7 @@ All database credentials are loaded from environment variables.
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -16,8 +17,12 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Database URL construction
 # ---------------------------------------------------------------------------
-# Use SQLite for easier local development
-DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./nutrition_label.db")
+# Resolve the DB path relative to this file so it always points to the project
+# root, regardless of the working directory uvicorn is launched from.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_DB_URL = f"sqlite:///{_PROJECT_ROOT / 'nutrition_label.db'}"
+
+DATABASE_URL: str = os.getenv("DATABASE_URL", _DEFAULT_DB_URL)
 
 # ---------------------------------------------------------------------------
 # Engine & session

@@ -356,7 +356,8 @@ with col_result:
 
                         # ── Metrics row ──
                         ocr_text = result.get("ocr_text", "")
-                        nutrients = parse_nutrition_values(ocr_text)
+                        nutrients = result.get("nutrients", [])
+                        analysis = result.get("analysis")
 
                         m1, m2, m3 = st.columns(3)
                         m1.metric("Upload ID", f"#{result.get('upload_id', '—')}")
@@ -369,17 +370,118 @@ with col_result:
                         if nutrients:
                             st.markdown("#### 🧪 Parsed Nutrients")
                             table_rows = "".join(
-                                f"<tr><td>{n['nutrient']}</td><td><strong>{n['value']}</strong></td></tr>"
+                                f"<tr><td>{n['name']}</td><td><strong>{n['value']}</strong></td><td>{n['unit']}</td></tr>"
                                 for n in nutrients
                             )
                             st.markdown(f"""
                             <table class="nutrition-table">
                                 <thead>
-                                    <tr><th>Nutrient</th><th>Value</th></tr>
+                                    <tr><th>Nutrient</th><th>Value</th><th>Unit</th></tr>
                                 </thead>
                                 <tbody>{table_rows}</tbody>
                             </table>
                             """, unsafe_allow_html=True)
+
+                        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
+
+                        # ── LLM Ingredient Analysis ──
+                        if analysis:
+                            st.markdown("#### 🤖 AI Ingredient Analysis")
+
+                            # Health score + summary
+                            health_score = analysis.get("overall_health_score", 0)
+                            score_color = (
+                                "#22c55e" if health_score >= 7
+                                else "#f59e0b" if health_score >= 4
+                                else "#ef4444"
+                            )
+                            score_label = (
+                                "Healthy" if health_score >= 7
+                                else "Moderate" if health_score >= 4
+                                else "Unhealthy"
+                            )
+
+                            st.markdown(f"""
+                            <div class="result-card" style="text-align: center;">
+                                <p style="font-size: 3.5rem; font-weight: 800; color: {score_color}; margin: 0;">
+                                    {health_score}<span style="font-size: 1.2rem; color: var(--text-secondary);">/10</span>
+                                </p>
+                                <p style="font-size: 1rem; font-weight: 600; color: {score_color}; margin: 0.2rem 0;">
+                                    {score_label}
+                                </p>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                                    {analysis.get("health_score_reasoning", "")}
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            # Summary
+                            summary = analysis.get("summary", "")
+                            if summary:
+                                st.markdown(f"""
+                                <div class="info-box">
+                                    <strong>📋 Summary:</strong> {summary}
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                            # Warnings
+                            warnings = analysis.get("warnings", [])
+                            if warnings:
+                                st.markdown("##### ⚠️ Warnings")
+                                for w in warnings:
+                                    st.warning(w)
+
+                            # Ingredients table
+                            ingredients = analysis.get("ingredients", [])
+                            if ingredients:
+                                st.markdown("##### 🧬 Ingredient Breakdown")
+                                ing_rows = ""
+                                for ing in ingredients:
+                                    flags = ing.get("harmful_flags", {})
+                                    flag_badges = ""
+                                    if flags.get("diabetes"):
+                                        flag_badges += '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🩸 Diabetes</span>'
+                                    if flags.get("kidney"):
+                                        flag_badges += '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🫘 Kidney</span>'
+                                    if flags.get("pregnancy"):
+                                        flag_badges += '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🤰 Pregnancy</span>'
+
+                                    allergen_badge = ""
+                                    if ing.get("is_allergen"):
+                                        atype = ing.get("allergen_type", "allergen")
+                                        allergen_badge = f'<span style="background:rgba(251,146,60,0.15);color:#fb923c;padding:2px 6px;border-radius:4px;font-size:0.75rem;">⚠️ {atype}</span>'
+
+                                    ing_rows += f"""
+                                    <tr>
+                                        <td><strong>{ing.get("name", "")}</strong></td>
+                                        <td>{ing.get("purpose", "")}</td>
+                                        <td>{flag_badges or "✅ None"}</td>
+                                        <td>{allergen_badge or "—"}</td>
+                                    </tr>
+                                    """
+
+                                st.markdown(f"""
+                                <table class="nutrition-table">
+                                    <thead>
+                                        <tr><th>Ingredient</th><th>Purpose</th><th>Risk Flags</th><th>Allergen</th></tr>
+                                    </thead>
+                                    <tbody>{ing_rows}</tbody>
+                                </table>
+                                """, unsafe_allow_html=True)
+
+                            # Low confidence items
+                            low_conf = analysis.get("low_confidence_items", [])
+                            if low_conf:
+                                st.markdown("##### 🔍 Low Confidence Items")
+                                st.caption("These ingredient names may be inaccurate due to OCR/translation issues:")
+                                st.markdown(", ".join(f"`{item}`" for item in low_conf))
+
+                            # OCR quality warning
+                            if analysis.get("ocr_quality_issue"):
+                                st.warning("⚠️ The OCR text quality was poor — analysis may be unreliable.")
+
+                        elif analysis is None:
+                            st.info("ℹ️ AI ingredient analysis unavailable — set GROQ_API_KEY in .env to enable.")
 
                         st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
 
