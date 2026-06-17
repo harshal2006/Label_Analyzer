@@ -3,7 +3,8 @@ Report router – ``GET /report/{upload_id}/download``
 
 Generates a downloadable PDF nutrition analysis report for a given upload.
 Fetches the upload record and its parsed nutrients from the database,
-enriches them with Groq-powered insights, and streams the PDF back.
+enriches them with Groq-powered insights, computes %DV flags, detects
+allergens, calculates macro split, and streams the PDF back.
 """
 
 import logging
@@ -16,6 +17,11 @@ from app.database import get_db
 from app.models.analysis import AnalysisResult
 from app.models.upload import Upload
 from app.services import groq_service, pdf_service
+from app.services.nutrition_analysis import (
+    calculate_dv_flags,
+    calculate_macro_split,
+    detect_allergens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +33,9 @@ router = APIRouter(prefix="/report", tags=["Reports"])
     summary="Download a PDF nutrition report",
     description=(
         "Generate and download a PDF report for a previously analysed upload. "
-        "The report includes a nutrient summary table and a detailed breakdown "
-        "with source and usage information powered by Groq LLM."
+        "The report includes a nutrient summary table with %DV flags, allergen "
+        "warnings, a macronutrient pie chart, and a detailed breakdown with "
+        "source and usage information powered by Groq LLM."
     ),
     responses={
         200: {"content": {"application/pdf": {}}, "description": "PDF report file"},
@@ -105,7 +112,19 @@ async def download_report(
         nutrients_dict[name] = f"{value} {unit}".strip()
 
     # ------------------------------------------------------------------
-    # 4. Get Groq nutrient insights (defensive — never crashes)
+    # 4. Compute %DV flags and macro split (pure, no API calls)
+    # ------------------------------------------------------------------
+    dv_flags = calculate_dv_flags(nutrients_dict)
+    macro_split = calculate_macro_split(nutrients_dict)
+
+    # ------------------------------------------------------------------
+    # 5. Detect allergens from OCR text
+    # ------------------------------------------------------------------
+    ocr_text = analysis_record.ocr_text or ""
+    allergens = detect_allergens(ocr_text)
+
+    # ------------------------------------------------------------------
+    # 6. Get Groq nutrient insights (defensive — never crashes)
     # ------------------------------------------------------------------
     try:
         insights = groq_service.get_nutrient_insights(nutrients_dict)
@@ -121,7 +140,7 @@ async def download_report(
         }
 
     # ------------------------------------------------------------------
-    # 5. Generate the PDF
+    # 7. Generate the PDF
     # ------------------------------------------------------------------
     product_info = {
         "upload_id": upload_record.id,
@@ -130,7 +149,14 @@ async def download_report(
     }
 
     try:
-        pdf_buffer = pdf_service.generate_report_pdf(product_info, nutrients_dict, insights)
+        pdf_buffer = pdf_service.generate_report_pdf(
+            product_info,
+            nutrients_dict,
+            insights,
+            dv_flags=dv_flags,
+            allergens=allergens,
+            macro_split=macro_split,
+        )
     except Exception as exc:
         logger.exception("PDF generation failed for upload %d", upload_id)
         raise HTTPException(
@@ -139,7 +165,7 @@ async def download_report(
         )
 
     # ------------------------------------------------------------------
-    # 6. Stream the PDF back
+    # 8. Stream the PDF back
     # ------------------------------------------------------------------
     return StreamingResponse(
         pdf_buffer,
