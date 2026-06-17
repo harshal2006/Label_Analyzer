@@ -25,6 +25,9 @@ python-dotenv==1.1.0
 # File upload support (included with FastAPI, listed for clarity)
 python-multipart==0.0.20
 
+# PDF report generation
+reportlab>=4.0
+
 # Streamlit UI
 streamlit>=1.45.0
 requests>=2.32.0

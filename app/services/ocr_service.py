@@ -87,26 +87,74 @@ KNOWN_NUTRIENTS: list[str] = [
     "Glutamic Acid",
     "Moisture",
     "Ash",
+    "Creatine Monohydrate",
+    "Creatine HCL",
+    "Creatine Nitrate",
+    "Creatine",
+    "Glutamine",
+    "L-Glutamine",
+    "Taurine",
+    "Arginine-Alpha-Ketoglutarate (AAKG)",
+    "Arginine-Alpha-Ketoglutarate",
+    "L-Arginine",
+    "L- Arginine",
+    "Arginine",
+    "D-Aspartic Acid",
+    "L-Leucine",
+    "L- Leucine",
+    "Leucine",
+    "L-Isoleucine",
+    "L- Isoleucine",
+    "Isoleucine",
+    "L-Valine",
+    "L- Valine",
+    "Valine",
+    "HMB (β-Hydroxy β-Methylbutyrate)",
+    "HMB",
+    "Beta-Alanine",
+    "Citrulline Malate",
+    "Citrulline",
+    "L-Citrulline",
+    "Betaine",
+    "Black Pepper Extract",
+    "Caffeine",
 ]
 
 # Pre-compile a set of lowercase nutrient names for fast lookup
 _NUTRIENT_NAMES_LOWER: set[str] = {n.lower() for n in KNOWN_NUTRIENTS}
+_SORTED_NUTRIENTS: list[str] = sorted(_NUTRIENT_NAMES_LOWER, key=len, reverse=True)
 
 # Regex to match a value line: number + optional unit (e.g. "24g", "116 kcal", "0.61 g", "50 mg")
 _VALUE_PATTERN = re.compile(
     r"^[\s]*"
     r"(?P<value>\d+(?:[.,]\d+)?)"       # numeric value (int or decimal)
     r"\s*"
-    r"(?P<unit>[a-zA-Zμµ%]+(?:/[a-zA-Z]+)?)?$"  # optional unit like g, mg, kcal, mcg, IU, %
+    r"(?P<unit>[a-zA-Zμµ%]+(?:/[a-zA-Z]+)?)?"  # optional unit like g, mg, kcal, mcg, IU, %
+    r"(?:\s+.*)?$"                      # ignore trailing text like % DV
 )
 
 
-def _clean_nutrient_name(raw: str) -> str | None:
-    """Strip leading dashes/bullets, trailing annotation markers, and whitespace.
-    Return the cleaned name if it matches a known nutrient, otherwise None."""
+def _clean_nutrient_name(raw: str) -> tuple[str, str] | None:
+    """Strip leading dashes/bullets and check for nutrient name.
+    Returns (nutrient_name, rest_of_line) if a known nutrient is found, else None.
+    Handles cases where nutrient and value are on the same line (e.g. 'Protein 24g').
+    """
     cleaned = raw.strip().lstrip("-–—^•·").rstrip("^*†‡§~").strip()
-    if cleaned.lower() in _NUTRIENT_NAMES_LOWER:
-        return cleaned
+    cleaned_lower = cleaned.lower()
+    
+    if not cleaned_lower:
+        return None
+
+    for nutrient in _SORTED_NUTRIENTS:
+        if cleaned_lower.startswith(nutrient):
+            # Check for word boundary to avoid matching "Fatigue" as "Fat"
+            if len(cleaned_lower) > len(nutrient) and cleaned_lower[len(nutrient)].isalpha():
+                continue
+            
+            rest = cleaned[len(nutrient):].lstrip(":- \t")
+            # Return proper title case for known nutrient
+            return nutrient.title(), rest
+            
     return None
 
 
@@ -126,8 +174,9 @@ def _parse_value_line(line: str) -> dict | None:
 def parse_nutrients(ocr_text: str) -> list[dict]:
     """Parse structured nutrient data from raw OCR text.
 
-    Scans lines for known nutrient names; when found, looks ahead up to 5
-    lines for the first value (per-serving), skipping noise lines.
+    Scans lines for known nutrient names. If found, tries to extract the value
+    from the rest of the line. If no value is on the same line, looks nearby
+    (both ahead and behind) to find the first value, skipping noise lines.
 
     Parameters
     ----------
@@ -142,21 +191,33 @@ def parse_nutrients(ocr_text: str) -> list[dict]:
     lines = ocr_text.split("\n")
     nutrients: list[dict] = []
     i = 0
+    consumed_lines = set()
 
     while i < len(lines):
-        name = _clean_nutrient_name(lines[i])
-        if name is not None:
-            # Look ahead at the next few lines for the per-serving value,
-            # skipping intervening noise lines (e.g. brand text, instructions)
+        match = _clean_nutrient_name(lines[i])
+        if match is not None:
+            name, rest = match
             parsed = None
-            for offset in range(1, 6):
-                if i + offset < len(lines):
-                    # Stop if we hit another nutrient name (don't steal its value)
-                    if _clean_nutrient_name(lines[i + offset]) is not None:
-                        break
-                    parsed = _parse_value_line(lines[i + offset])
-                    if parsed:
-                        break
+            
+            # 1. Try to parse value from the same line (e.g., "Protein 24g")
+            if rest:
+                parsed = _parse_value_line(rest)
+
+            # 2. If not found on same line, look nearby (both ahead and behind)
+            if not parsed:
+                # PaddleOCR sometimes places the value before the label and sometimes after.
+                for offset in [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]:
+                    idx = i + offset
+                    if 0 <= idx < len(lines) and idx not in consumed_lines:
+                        # Skip if it's another nutrient name
+                        if _clean_nutrient_name(lines[idx]) is not None:
+                            continue
+                        
+                        parsed = _parse_value_line(lines[idx])
+                        if parsed:
+                            consumed_lines.add(idx)
+                            break
+                            
             if parsed:
                 nutrients.append({
                     "name": name,

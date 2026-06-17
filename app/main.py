@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, engine
 from app.routers import upload as upload_router
+from app.routers import report as report_router
 from app.services.storage_service import UPLOAD_DIR
 
 # ---------------------------------------------------------------------------
@@ -84,6 +85,7 @@ app.add_middleware(
 # Routers
 # ---------------------------------------------------------------------------
 app.include_router(upload_router.router)
+app.include_router(report_router.router)
 
 # ---------------------------------------------------------------------------
 # Static files – serve uploaded images (development only)

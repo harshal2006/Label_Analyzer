@@ -18,6 +18,7 @@ import streamlit as st
 API_BASE = "http://127.0.0.1:8000"
 UPLOAD_ENDPOINT = f"{API_BASE}/upload"
 HEALTH_ENDPOINT = f"{API_BASE}/health"
+REPORT_ENDPOINT = f"{API_BASE}/report"
 
 ALLOWED_TYPES = ["jpg", "jpeg", "png", "webp"]
 
@@ -342,6 +343,7 @@ with col_upload:
 with col_result:
     st.markdown("### 📊 Analysis Results")
 
+    # ── Run analysis when button is clicked ──
     if analyze_btn and uploaded_file is not None:
         if not is_healthy:
             st.error("⚠️ The backend server is not running. Please start it first.")
@@ -352,147 +354,8 @@ with col_result:
                     result = upload_image(file_bytes, uploaded_file.name)
 
                     if result.get("success"):
-                        st.success("✅ Analysis complete!")
-
-                        # ── Metrics row ──
-                        ocr_text = result.get("ocr_text", "")
-                        nutrients = result.get("nutrients", [])
-                        analysis = result.get("analysis")
-
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Upload ID", f"#{result.get('upload_id', '—')}")
-                        m2.metric("Lines Found", len(ocr_text.strip().split("\n")) if ocr_text else 0)
-                        m3.metric("Nutrients", len(nutrients))
-
-                        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
-
-                        # ── Nutrition table ──
-                        if nutrients:
-                            st.markdown("#### 🧪 Parsed Nutrients")
-                            table_rows = "".join(
-                                f"<tr><td>{n['name']}</td><td><strong>{n['value']}</strong></td><td>{n['unit']}</td></tr>"
-                                for n in nutrients
-                            )
-                            st.markdown(f"""
-                            <table class="nutrition-table">
-                                <thead>
-                                    <tr><th>Nutrient</th><th>Value</th><th>Unit</th></tr>
-                                </thead>
-                                <tbody>{table_rows}</tbody>
-                            </table>
-                            """, unsafe_allow_html=True)
-
-                        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
-
-                        # ── LLM Ingredient Analysis ──
-                        if analysis:
-                            st.markdown("#### 🤖 AI Ingredient Analysis")
-
-                            # Health score + summary
-                            health_score = analysis.get("overall_health_score", 0)
-                            score_color = (
-                                "#22c55e" if health_score >= 7
-                                else "#f59e0b" if health_score >= 4
-                                else "#ef4444"
-                            )
-                            score_label = (
-                                "Healthy" if health_score >= 7
-                                else "Moderate" if health_score >= 4
-                                else "Unhealthy"
-                            )
-
-                            st.markdown(f"""
-                            <div class="result-card" style="text-align: center;">
-                                <p style="font-size: 3.5rem; font-weight: 800; color: {score_color}; margin: 0;">
-                                    {health_score}<span style="font-size: 1.2rem; color: var(--text-secondary);">/10</span>
-                                </p>
-                                <p style="font-size: 1rem; font-weight: 600; color: {score_color}; margin: 0.2rem 0;">
-                                    {score_label}
-                                </p>
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                                    {analysis.get("health_score_reasoning", "")}
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                            # Summary
-                            summary = analysis.get("summary", "")
-                            if summary:
-                                st.markdown(f"""
-                                <div class="info-box">
-                                    <strong>📋 Summary:</strong> {summary}
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                            # Warnings
-                            warnings = analysis.get("warnings", [])
-                            if warnings:
-                                st.markdown("##### ⚠️ Warnings")
-                                for w in warnings:
-                                    st.warning(w)
-
-                            # Ingredients table
-                            ingredients = analysis.get("ingredients", [])
-                            if ingredients:
-                                st.markdown("##### 🧬 Ingredient Breakdown")
-                                ing_rows = ""
-                                for ing in ingredients:
-                                    flags = ing.get("harmful_flags", {})
-                                    flag_badges = ""
-                                    if flags.get("diabetes"):
-                                        flag_badges += '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🩸 Diabetes</span>'
-                                    if flags.get("kidney"):
-                                        flag_badges += '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🫘 Kidney</span>'
-                                    if flags.get("pregnancy"):
-                                        flag_badges += '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🤰 Pregnancy</span>'
-
-                                    allergen_badge = ""
-                                    if ing.get("is_allergen"):
-                                        atype = ing.get("allergen_type", "allergen")
-                                        allergen_badge = f'<span style="background:rgba(251,146,60,0.15);color:#fb923c;padding:2px 6px;border-radius:4px;font-size:0.75rem;">⚠️ {atype}</span>'
-
-                                    ing_rows += f"""
-                                    <tr>
-                                        <td><strong>{ing.get("name", "")}</strong></td>
-                                        <td>{ing.get("purpose", "")}</td>
-                                        <td>{flag_badges or "✅ None"}</td>
-                                        <td>{allergen_badge or "—"}</td>
-                                    </tr>
-                                    """
-
-                                st.markdown(f"""
-                                <table class="nutrition-table">
-                                    <thead>
-                                        <tr><th>Ingredient</th><th>Purpose</th><th>Risk Flags</th><th>Allergen</th></tr>
-                                    </thead>
-                                    <tbody>{ing_rows}</tbody>
-                                </table>
-                                """, unsafe_allow_html=True)
-
-                            # Low confidence items
-                            low_conf = analysis.get("low_confidence_items", [])
-                            if low_conf:
-                                st.markdown("##### 🔍 Low Confidence Items")
-                                st.caption("These ingredient names may be inaccurate due to OCR/translation issues:")
-                                st.markdown(", ".join(f"`{item}`" for item in low_conf))
-
-                            # OCR quality warning
-                            if analysis.get("ocr_quality_issue"):
-                                st.warning("⚠️ The OCR text quality was poor — analysis may be unreliable.")
-
-                        elif analysis is None:
-                            st.info("ℹ️ AI ingredient analysis unavailable — set GROQ_API_KEY in .env to enable.")
-
-                        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
-
-                        # ── Raw OCR text ──
-                        st.markdown("#### 📝 Raw OCR Text")
-                        st.code(ocr_text, language="text")
-
-                        # ── Additional details ──
-                        with st.expander("🗂️ Full API Response"):
-                            st.json(result)
-
+                        # Save to session state so it persists across reruns
+                        st.session_state["analysis_result"] = result
                     else:
                         st.error("❌ The server returned an unsuccessful response.")
                         st.json(result)
@@ -507,6 +370,200 @@ with col_result:
                     st.error("❌ Could not connect to the backend. Is the FastAPI server running?")
                 except Exception as exc:
                     st.error(f"❌ Unexpected error: {exc}")
+
+    # ── Display results from session state (persists across reruns) ──
+    if "analysis_result" in st.session_state:
+        result = st.session_state["analysis_result"]
+        st.success("✅ Analysis complete!")
+
+        # ── Metrics row ──
+        ocr_text = result.get("ocr_text", "")
+        nutrients = result.get("nutrients", [])
+        analysis = result.get("analysis")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Upload ID", f"#{result.get('upload_id', '—')}")
+        m2.metric("Lines Found", len(ocr_text.strip().split("\n")) if ocr_text else 0)
+        m3.metric("Nutrients", len(nutrients))
+
+        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
+
+        # ── Nutrition table ──
+        if nutrients:
+            st.markdown("#### 🧪 Parsed Nutrients")
+            table_rows = "".join(
+                f"<tr><td>{n['name']}</td><td><strong>{n['value']}</strong></td><td>{n['unit']}</td></tr>"
+                for n in nutrients
+            )
+            st.markdown(f"""
+            <table class="nutrition-table">
+                <thead>
+                    <tr><th>Nutrient</th><th>Value</th><th>Unit</th></tr>
+                </thead>
+                <tbody>{table_rows}</tbody>
+            </table>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
+
+        # ── LLM Ingredient Analysis ──
+        if analysis:
+            st.markdown("#### 🤖 AI Ingredient Analysis")
+
+            # Health score + summary
+            health_score = analysis.get("overall_health_score", 0)
+            score_color = (
+                "#22c55e" if health_score >= 7
+                else "#f59e0b" if health_score >= 4
+                else "#ef4444"
+            )
+            score_label = (
+                "Healthy" if health_score >= 7
+                else "Moderate" if health_score >= 4
+                else "Unhealthy"
+            )
+
+            st.markdown(f"""
+            <div class="result-card" style="text-align: center;">
+                <p style="font-size: 3.5rem; font-weight: 800; color: {score_color}; margin: 0;">
+                    {health_score}<span style="font-size: 1.2rem; color: var(--text-secondary);">/10</span>
+                </p>
+                <p style="font-size: 1rem; font-weight: 600; color: {score_color}; margin: 0.2rem 0;">
+                    {score_label}
+                </p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                    {analysis.get("health_score_reasoning", "")}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Summary
+            summary = analysis.get("summary", "")
+            if summary:
+                st.markdown(f"""
+                <div class="info-box">
+                    <strong>📋 Summary:</strong> {summary}
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Warnings
+            warnings = analysis.get("warnings", [])
+            if warnings:
+                st.markdown("##### ⚠️ Warnings")
+                for w in warnings:
+                    st.warning(w)
+
+            # Ingredients table
+            ingredients = analysis.get("ingredients", [])
+            if ingredients:
+                st.markdown("##### 🧬 Ingredient Breakdown")
+                ing_rows = ""
+                for ing in ingredients:
+                    flags = ing.get("harmful_flags", {})
+                    flag_badges = ""
+                    if flags.get("diabetes"):
+                        flag_badges += '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🩸 Diabetes</span>'
+                    if flags.get("kidney"):
+                        flag_badges += '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🫘 Kidney</span>'
+                    if flags.get("pregnancy"):
+                        flag_badges += '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🤰 Pregnancy</span>'
+
+                    allergen_badge = ""
+                    if ing.get("is_allergen"):
+                        atype = ing.get("allergen_type", "allergen")
+                        allergen_badge = f'<span style="background:rgba(251,146,60,0.15);color:#fb923c;padding:2px 6px;border-radius:4px;font-size:0.75rem;">⚠️ {atype}</span>'
+
+                    ing_rows += f"""
+                    <tr>
+                        <td><strong>{ing.get("name", "")}</strong></td>
+                        <td>{ing.get("purpose", "")}</td>
+                        <td>{flag_badges or "✅ None"}</td>
+                        <td>{allergen_badge or "—"}</td>
+                    </tr>
+                    """
+
+                st.markdown(f"""
+                <table class="nutrition-table">
+                    <thead>
+                        <tr><th>Ingredient</th><th>Purpose</th><th>Risk Flags</th><th>Allergen</th></tr>
+                    </thead>
+                    <tbody>{ing_rows}</tbody>
+                </table>
+                """, unsafe_allow_html=True)
+
+            # Low confidence items
+            low_conf = analysis.get("low_confidence_items", [])
+            if low_conf:
+                st.markdown("##### 🔍 Low Confidence Items")
+                st.caption("These ingredient names may be inaccurate due to OCR/translation issues:")
+                st.markdown(", ".join(f"`{item}`" for item in low_conf))
+
+            # OCR quality warning
+            if analysis.get("ocr_quality_issue"):
+                st.warning("⚠️ The OCR text quality was poor — analysis may be unreliable.")
+
+        elif analysis is None:
+            st.info("ℹ️ AI ingredient analysis unavailable — set GROQ_API_KEY in .env to enable.")
+
+        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
+
+        # ── Raw OCR text ──
+        st.markdown("#### 📝 Raw OCR Text")
+        st.code(ocr_text, language="text")
+
+        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
+
+        # ── PDF Report Download ──
+        st.markdown("#### 📄 PDF Report")
+        current_upload_id = result.get("upload_id")
+        if current_upload_id:
+            # Fetch the PDF on button click and cache it in session state
+            if st.button(
+                "📄  Generate & Download Report",
+                type="secondary",
+                use_container_width=True,
+                key="generate_report_btn",
+            ):
+                with st.spinner("Generating PDF report… (fetching AI insights)"):
+                    try:
+                        report_resp = requests.get(
+                            f"{REPORT_ENDPOINT}/{current_upload_id}/download",
+                            timeout=120,
+                        )
+                        if report_resp.status_code == 200:
+                            st.session_state["report_pdf"] = report_resp.content
+                            st.session_state["report_upload_id"] = current_upload_id
+                            st.rerun()
+                        else:
+                            try:
+                                err_detail = report_resp.json().get("detail", report_resp.text)
+                            except Exception:
+                                err_detail = report_resp.text
+                            st.error(f"❌ Report generation failed: {err_detail}")
+                    except requests.ConnectionError:
+                        st.error("❌ Could not connect to the backend for report generation.")
+                    except Exception as report_exc:
+                        st.error(f"❌ Report error: {report_exc}")
+
+            # Show the download button if PDF is already generated for this upload
+            if (
+                "report_pdf" in st.session_state
+                and st.session_state.get("report_upload_id") == current_upload_id
+            ):
+                st.download_button(
+                    label="⬇️ Download PDF Report",
+                    data=st.session_state["report_pdf"],
+                    file_name=f"report_{current_upload_id}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_btn",
+                )
+                st.success("✅ Report ready! Click the button above to download.")
+
+        # ── Additional details ──
+        with st.expander("🗂️ Full API Response"):
+            st.json(result)
+
     else:
         st.markdown("""
         <div class="result-card" style="text-align: center; padding: 3rem 1.5rem;">
