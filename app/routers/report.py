@@ -124,23 +124,51 @@ async def download_report(
     allergens = detect_allergens(ocr_text)
 
     # ------------------------------------------------------------------
-    # 6. Get Groq nutrient insights (defensive — never crashes)
+    # 6. Extract ingredient names from the stored analysis
+    # ------------------------------------------------------------------
+    ingredient_names: list[str] = []
+    try:
+        analysis_data = analysis_json.get("analysis") or {}
+        raw_ingredients = analysis_data.get("ingredients", [])
+        ingredient_names = [
+            ing.get("name", "") for ing in raw_ingredients if ing.get("name")
+        ]
+    except Exception as exc:
+        logger.warning("Could not extract ingredient names: %s", exc)
+
+    # ------------------------------------------------------------------
+    # 7. Get Groq report insights (defensive — never crashes)
     # ------------------------------------------------------------------
     try:
-        insights = groq_service.get_nutrient_insights(nutrients_dict)
+        primary_goal, ingredient_details, how_to_use = (
+            groq_service.get_report_insights(nutrients_dict, ingredient_names)
+        )
     except Exception as exc:
         logger.exception("Groq insights failed (non-fatal): %s", exc)
         # Build fallback so PDF can still be generated
-        insights = {
-            name: {
+        primary_goal = (
+            "This product provides a mix of nutritional components "
+            "suitable for general consumption."
+        )
+        ingredient_details = [
+            {
+                "name": name,
                 "source": "Information not available.",
-                "usage": "Information not available.",
+                "role": "Information not available.",
             }
-            for name in nutrients_dict
+            for name in ingredient_names
+        ]
+        how_to_use = {
+            "product_type": "Nutritional Supplement",
+            "usage_instructions": "Follow the dosage instructions on the product label.",
+            "cautions": (
+                "Consult a healthcare professional before use "
+                "if you have any medical conditions."
+            ),
         }
 
     # ------------------------------------------------------------------
-    # 7. Generate the PDF
+    # 8. Generate the PDF
     # ------------------------------------------------------------------
     product_info = {
         "upload_id": upload_record.id,
@@ -152,7 +180,9 @@ async def download_report(
         pdf_buffer = pdf_service.generate_report_pdf(
             product_info,
             nutrients_dict,
-            insights,
+            primary_goal,
+            ingredient_details=ingredient_details,
+            how_to_use=how_to_use,
             dv_flags=dv_flags,
             allergens=allergens,
             macro_split=macro_split,
@@ -165,7 +195,7 @@ async def download_report(
         )
 
     # ------------------------------------------------------------------
-    # 8. Stream the PDF back
+    # 9. Stream the PDF back
     # ------------------------------------------------------------------
     return StreamingResponse(
         pdf_buffer,

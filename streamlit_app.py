@@ -210,6 +210,24 @@ st.markdown("""
         background: linear-gradient(90deg, transparent, var(--border), transparent);
         margin: 1.5rem 0;
     }
+
+    /* ── Top report bar ── */
+    .top-report-bar {
+        background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(6,214,160,0.08));
+        border: 1px solid rgba(99,102,241,0.2);
+        border-radius: 12px;
+        padding: 0.6rem 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .top-report-bar .bar-label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--primary-light);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -290,6 +308,8 @@ with st.sidebar:
     st.caption("Nutrition Label Analyzer v0.1.0")
 
 
+
+
 # ---------------------------------------------------------------------------
 # Main content
 # ---------------------------------------------------------------------------
@@ -357,15 +377,16 @@ with col_result:
                         # Save to session state so it persists across reruns
                         st.session_state["analysis_result"] = result
                     else:
-                        st.error("❌ The server returned an unsuccessful response.")
-                        st.json(result)
+                        detail = result.get("detail", "Unknown error")
+                        st.error(f"❌ The server returned an unsuccessful response: {detail}")
 
                 except requests.HTTPError as exc:
                     st.error(f"❌ Server error: {exc.response.status_code}")
                     try:
-                        st.json(exc.response.json())
+                        err_detail = exc.response.json().get("detail", "No details available.")
                     except Exception:
-                        st.text(exc.response.text)
+                        err_detail = exc.response.text[:300] if exc.response.text else "No details available."
+                    st.error(f"Details: {err_detail}")
                 except requests.ConnectionError:
                     st.error("❌ Could not connect to the backend. Is the FastAPI server running?")
                 except Exception as exc:
@@ -374,7 +395,53 @@ with col_result:
     # ── Display results from session state (persists across reruns) ──
     if "analysis_result" in st.session_state:
         result = st.session_state["analysis_result"]
-        st.success("✅ Analysis complete!")
+        current_upload_id = result.get("upload_id")
+
+        # ── Header row: success message + report button side by side ──
+        hdr_left, hdr_right = st.columns([3, 2])
+        with hdr_left:
+            st.success("✅ Analysis complete!")
+        with hdr_right:
+            if current_upload_id:
+                if (
+                    "report_pdf" in st.session_state
+                    and st.session_state.get("report_upload_id") == current_upload_id
+                ):
+                    st.download_button(
+                        label="⬇️ Download PDF Report",
+                        data=st.session_state["report_pdf"],
+                        file_name=f"report_{current_upload_id}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="download_pdf_btn",
+                    )
+                else:
+                    if st.button(
+                        "📄 Generate Report",
+                        type="primary",
+                        use_container_width=True,
+                        key="generate_report_btn",
+                    ):
+                        with st.spinner("Generating PDF report…"):
+                            try:
+                                report_resp = requests.get(
+                                    f"{REPORT_ENDPOINT}/{current_upload_id}/download",
+                                    timeout=120,
+                                )
+                                if report_resp.status_code == 200:
+                                    st.session_state["report_pdf"] = report_resp.content
+                                    st.session_state["report_upload_id"] = current_upload_id
+                                    st.rerun()
+                                else:
+                                    try:
+                                        err_detail = report_resp.json().get("detail", report_resp.text)
+                                    except Exception:
+                                        err_detail = report_resp.text
+                                    st.error(f"❌ {err_detail}")
+                            except requests.ConnectionError:
+                                st.error("❌ Backend unreachable.")
+                            except Exception as report_exc:
+                                st.error(f"❌ {report_exc}")
 
         # ── Metrics row ──
         ocr_text = result.get("ocr_text", "")
@@ -453,44 +520,6 @@ with col_result:
                 for w in warnings:
                     st.warning(w)
 
-            # Ingredients table
-            ingredients = analysis.get("ingredients", [])
-            if ingredients:
-                st.markdown("##### 🧬 Ingredient Breakdown")
-                ing_rows = ""
-                for ing in ingredients:
-                    flags = ing.get("harmful_flags", {})
-                    flag_badges = ""
-                    if flags.get("diabetes"):
-                        flag_badges += '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🩸 Diabetes</span>'
-                    if flags.get("kidney"):
-                        flag_badges += '<span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🫘 Kidney</span>'
-                    if flags.get("pregnancy"):
-                        flag_badges += '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 6px;border-radius:4px;font-size:0.75rem;margin-right:4px;">🤰 Pregnancy</span>'
-
-                    allergen_badge = ""
-                    if ing.get("is_allergen"):
-                        atype = ing.get("allergen_type", "allergen")
-                        allergen_badge = f'<span style="background:rgba(251,146,60,0.15);color:#fb923c;padding:2px 6px;border-radius:4px;font-size:0.75rem;">⚠️ {atype}</span>'
-
-                    ing_rows += f"""
-                    <tr>
-                        <td><strong>{ing.get("name", "")}</strong></td>
-                        <td>{ing.get("purpose", "")}</td>
-                        <td>{flag_badges or "✅ None"}</td>
-                        <td>{allergen_badge or "—"}</td>
-                    </tr>
-                    """
-
-                st.markdown(f"""
-                <table class="nutrition-table">
-                    <thead>
-                        <tr><th>Ingredient</th><th>Purpose</th><th>Risk Flags</th><th>Allergen</th></tr>
-                    </thead>
-                    <tbody>{ing_rows}</tbody>
-                </table>
-                """, unsafe_allow_html=True)
-
             # Low confidence items
             low_conf = analysis.get("low_confidence_items", [])
             if low_conf:
@@ -507,62 +536,34 @@ with col_result:
 
         st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
 
-        # ── Raw OCR text ──
-        st.markdown("#### 📝 Raw OCR Text")
-        st.code(ocr_text, language="text")
-
-        st.markdown('<div class="styled-divider"></div>', unsafe_allow_html=True)
-
-        # ── PDF Report Download ──
-        st.markdown("#### 📄 PDF Report")
-        current_upload_id = result.get("upload_id")
-        if current_upload_id:
-            # Fetch the PDF on button click and cache it in session state
-            if st.button(
-                "📄  Generate & Download Report",
-                type="secondary",
-                use_container_width=True,
-                key="generate_report_btn",
-            ):
-                with st.spinner("Generating PDF report… (fetching AI insights)"):
-                    try:
-                        report_resp = requests.get(
-                            f"{REPORT_ENDPOINT}/{current_upload_id}/download",
-                            timeout=120,
-                        )
-                        if report_resp.status_code == 200:
-                            st.session_state["report_pdf"] = report_resp.content
-                            st.session_state["report_upload_id"] = current_upload_id
-                            st.rerun()
-                        else:
-                            try:
-                                err_detail = report_resp.json().get("detail", report_resp.text)
-                            except Exception:
-                                err_detail = report_resp.text
-                            st.error(f"❌ Report generation failed: {err_detail}")
-                    except requests.ConnectionError:
-                        st.error("❌ Could not connect to the backend for report generation.")
-                    except Exception as report_exc:
-                        st.error(f"❌ Report error: {report_exc}")
-
-            # Show the download button if PDF is already generated for this upload
-            if (
-                "report_pdf" in st.session_state
-                and st.session_state.get("report_upload_id") == current_upload_id
-            ):
-                st.download_button(
-                    label="⬇️ Download PDF Report",
-                    data=st.session_state["report_pdf"],
-                    file_name=f"report_{current_upload_id}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_btn",
-                )
-                st.success("✅ Report ready! Click the button above to download.")
-
-        # ── Additional details ──
-        with st.expander("🗂️ Full API Response"):
-            st.json(result)
+        # ── Additional details (debug) ──
+        with st.expander("🔧 Debug: Raw API Response"):
+            # Show structured summary rather than raw JSON dump
+            debug_tabs = st.tabs(["📊 Nutrients", "🤖 Analysis", "📝 OCR"])
+            with debug_tabs[0]:
+                if nutrients:
+                    import pandas as pd
+                    df = pd.DataFrame(nutrients)
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("No nutrient data available.")
+            with debug_tabs[1]:
+                if analysis:
+                    st.markdown(f"**Health Score:** {analysis.get('overall_health_score', '—')}/10")
+                    st.markdown(f"**Reasoning:** {analysis.get('health_score_reasoning', '—')}")
+                    st.markdown(f"**Summary:** {analysis.get('summary', '—')}")
+                    warnings_list = analysis.get('warnings', [])
+                    if warnings_list:
+                        st.markdown("**Warnings:**")
+                        for w in warnings_list:
+                            st.markdown(f"- ⚠️ {w}")
+                else:
+                    st.info("No analysis data available.")
+            with debug_tabs[2]:
+                if ocr_text:
+                    st.code(ocr_text, language="text")
+                else:
+                    st.info("No OCR text available.")
 
     else:
         st.markdown("""

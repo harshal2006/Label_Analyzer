@@ -24,10 +24,11 @@ A user uploads an image of a supplement or food nutrition label via a Streamlit 
 1. **Accepts** the image and saves it locally.
 2. **Runs OCR** locally using PaddleOCR to extract text.
 3. **Parses** nutrients and their values from the OCR text.
-4. **Analyses** ingredients via the Groq LLM API to determine health scores, warnings, and purpose.
-5. **Stores** the metadata, raw OCR, and analysis in a SQLite database.
-6. **Displays** a rich UI with health scores, ingredient breakdowns, and risk flags.
-7. **Generates** a downloadable PDF report with detailed nutrient insights.
+4. **Analyses** ingredients via the Groq LLM API to determine health scores, warnings, functional roles, and natural sources.
+5. **Infers** product type and generates practical "How to Use" guidelines and cautions.
+6. **Stores** the metadata, raw OCR, and analysis in a SQLite database.
+7. **Displays** a clean, rich UI with health scores, risk flags, and an inline PDF report download. Raw debug output is hidden behind a clean tabbed view.
+8. **Generates** a downloadable PDF report with macro split charts, allergen tables, "How to Use" guidelines, and detailed ingredient breakdowns.
 
 ---
 
@@ -63,6 +64,11 @@ nutrition-label-analyzer/
 │   │   ├── user.py          # User ORM model
 │   │   ├── upload.py        # Upload ORM model
 │   │   └── analysis.py      # AnalysisResult ORM model
+│   ├── schemas/
+│   │   └── upload.py        # Pydantic validation schemas
+│   ├── utils/
+│   │   ├── nutrition_reference.py # DV values & common allergens
+│   │   └── pdf_styles.py          # Centralized PDF styling & colors
 │   └── services/
 │       ├── ocr_service.py      # Local PaddleOCR wrapper
 │       ├── analysis_service.py # Groq LLM integration
@@ -184,4 +190,4 @@ curl -O -J http://127.0.0.1:8000/report/1/download
 
 ## License
 
-Internal project – Nutrabay Internship 2026.
+Internal project – Internship 2026.

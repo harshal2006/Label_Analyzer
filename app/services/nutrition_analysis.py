@@ -83,7 +83,7 @@ def calculate_dv_flags(nutrients: dict[str, str]) -> dict[str, dict]:
 # 2. Allergen detection
 # ---------------------------------------------------------------------------
 
-def detect_allergens(ingredient_text: str) -> list[str]:
+def detect_allergens(ingredient_text: str) -> list[dict]:
     """Detect major allergens in an ingredient / OCR text.
 
     Parameters
@@ -93,23 +93,31 @@ def detect_allergens(ingredient_text: str) -> list[str]:
 
     Returns
     -------
-    list[str]
-        Display-friendly allergen names, deduplicated.
+    list[dict]
+        A list of dictionaries, each containing:
+        - "allergen": Display-friendly allergen name.
+        - "matched_ingredients": List of specific synonyms/keywords found.
         Empty list if text is empty or no allergens found.
     """
     if not ingredient_text or not ingredient_text.strip():
         return []
 
     text_lower = ingredient_text.lower()
-    detected: list[str] = []
+    detected: list[dict] = []
 
     for entry in COMMON_ALLERGENS:
         allergen_name = entry["name"]
+        matched_synonyms = []
         for keyword in entry["keywords"]:
             if keyword in text_lower:
-                if allergen_name not in detected:
-                    detected.append(allergen_name)
-                break  # one match per allergen is enough
+                if keyword not in matched_synonyms:
+                    matched_synonyms.append(keyword)
+        
+        if matched_synonyms:
+            detected.append({
+                "allergen": allergen_name,
+                "matched_ingredients": matched_synonyms,
+            })
 
     return detected
 

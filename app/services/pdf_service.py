@@ -2,9 +2,9 @@
 PDF Report Service — generates a downloadable nutrition analysis report.
 
 Uses reportlab.platypus to build a multi-page PDF with:
-  - Page 1: title, allergen warning, nutrient summary table with %DV/flags,
-    and a macronutrient pie chart.
-  - Page 2+: detailed nutrient breakdown with source/usage from Groq.
+  - Page 1: title, product summary, "How to Use" section, allergen info,
+    nutrient summary table with %DV/flags, and a macronutrient pie chart.
+  - Page 2+: detailed ingredient breakdown with source & role from Groq.
   - Footer on every page: page number and disclaimer.
 
 Returns a BytesIO buffer so the PDF can be streamed without disk writes.
@@ -17,12 +17,10 @@ from pathlib import Path
 
 from reportlab.graphics.charts.legends import Legend
 from reportlab.graphics.charts.piecharts import Pie
-from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.shapes import Drawing, Line
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch, mm
+from reportlab.lib.units import mm
 from reportlab.platypus import (
     PageBreak,
     Paragraph,
@@ -32,151 +30,81 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Colour palette
-# ---------------------------------------------------------------------------
-_PRIMARY = colors.HexColor("#4f46e5")
-_PRIMARY_LIGHT = colors.HexColor("#818cf8")
-_ACCENT = colors.HexColor("#06d6a0")
-_DARK_BG = colors.HexColor("#1a1a2e")
-_HEADER_BG = colors.HexColor("#4f46e5")
-_HEADER_TEXT = colors.white
-_ROW_ALT = colors.HexColor("#f0f0f5")
-_TEXT_DARK = colors.HexColor("#1e1e2e")
-_TEXT_SECONDARY = colors.HexColor("#6b7280")
-
-_RED = colors.HexColor("#dc2626")
-_AMBER = colors.HexColor("#d97706")
-_GREEN = colors.HexColor("#16a34a")
-_ALLERGEN_BG = colors.HexColor("#fef2f2")
-_ALLERGEN_BORDER = colors.HexColor("#dc2626")
-
-# Pie chart colours
-_PIE_PROTEIN = colors.HexColor("#6366f1")  # indigo
-_PIE_CARBS = colors.HexColor("#06b6d4")    # cyan
-_PIE_FAT = colors.HexColor("#f59e0b")      # amber
-
-_DISCLAIMER = (
-    "This report is for informational purposes only and does not "
-    "constitute medical advice."
+from app.utils.pdf_styles import (
+    ALLERGEN_BG,
+    ALLERGEN_BORDER,
+    GOAL_BG,
+    GOAL_BORDER,
+    HOW_TO_USE_BG,
+    HOW_TO_USE_BORDER,
+    INGREDIENT_BG,
+    INGREDIENT_BORDER,
+    NO_ALLERGEN_BG,
+    NO_ALLERGEN_BORDER,
+    PIE_CARBS,
+    PIE_FAT,
+    PIE_PROTEIN,
+    PRIMARY_LIGHT,
+    RED,
+    AMBER,
+    GREEN,
+    get_allergen_table_style,
+    get_data_table_style,
+    get_highlight_box_style,
+    get_report_styles,
 )
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Page footer callback
 # ---------------------------------------------------------------------------
 def _footer(canvas, doc):
-    """Draw page number and disclaimer on every page."""
+    """Draw page number, disclaimer, and top border line on every page footer."""
     canvas.saveState()
     page_num = canvas.getPageNumber()
     width, height = A4
 
+    styles = get_report_styles()
+    
+    # Top border line for footer
+    canvas.setStrokeColor(PRIMARY_LIGHT)
+    canvas.setLineWidth(0.5)
+    canvas.line(20 * mm, 18 * mm, width - 20 * mm, 18 * mm)
+
     # Page number — right side
     canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(_TEXT_SECONDARY)
+    canvas.setFillColor(colors.HexColor("#6b7280"))
     canvas.drawRightString(width - 20 * mm, 12 * mm, f"Page {page_num}")
 
     # Disclaimer — left side
-    canvas.setFont("Helvetica", 7)
-    canvas.setFillColor(_TEXT_SECONDARY)
-    canvas.drawString(20 * mm, 12 * mm, _DISCLAIMER)
+    disclaimer_text = (
+        "This report is for informational purposes only and does not "
+        "constitute medical advice."
+    )
+    p = Paragraph(disclaimer_text, styles["Disclaimer"])
+    # We draw the paragraph at a specific absolute position
+    w, h = p.wrap(width - 60 * mm, 10 * mm)
+    p.drawOn(canvas, 20 * mm, 12 * mm)
 
     canvas.restoreState()
 
 
 # ---------------------------------------------------------------------------
-# Style helpers
+# Drawing Helpers
 # ---------------------------------------------------------------------------
-def _get_styles():
-    """Build custom paragraph styles for the report."""
-    styles = getSampleStyleSheet()
-
-    styles.add(ParagraphStyle(
-        "ReportTitle",
-        parent=styles["Title"],
-        fontSize=22,
-        leading=28,
-        textColor=_PRIMARY,
-        alignment=TA_CENTER,
-        spaceAfter=6,
-    ))
-
-    styles.add(ParagraphStyle(
-        "ReportSubtitle",
-        parent=styles["Normal"],
-        fontSize=11,
-        leading=14,
-        textColor=_TEXT_SECONDARY,
-        alignment=TA_CENTER,
-        spaceAfter=20,
-    ))
-
-    styles.add(ParagraphStyle(
-        "SectionHeading",
-        parent=styles["Heading2"],
-        fontSize=16,
-        leading=20,
-        textColor=_PRIMARY,
-        spaceBefore=16,
-        spaceAfter=10,
-    ))
-
-    styles.add(ParagraphStyle(
-        "NutrientHeading",
-        parent=styles["Heading3"],
-        fontSize=12,
-        leading=16,
-        textColor=_TEXT_DARK,
-        spaceBefore=14,
-        spaceAfter=4,
-    ))
-
-    styles.add(ParagraphStyle(
-        "ReportBody",
-        parent=styles["Normal"],
-        fontSize=10,
-        leading=14,
-        textColor=_TEXT_DARK,
-        spaceAfter=4,
-    ))
-
-    styles.add(ParagraphStyle(
-        "ReportLabel",
-        parent=styles["Normal"],
-        fontSize=10,
-        leading=13,
-        textColor=_TEXT_SECONDARY,
-        spaceAfter=2,
-    ))
-
-    styles.add(ParagraphStyle(
-        "AllergenText",
-        parent=styles["Normal"],
-        fontSize=11,
-        leading=15,
-        textColor=_RED,
-        alignment=TA_LEFT,
-        spaceAfter=0,
-    ))
-
-    return styles
+def _build_divider(width: float) -> Drawing:
+    """Create a thin horizontal divider line."""
+    d = Drawing(width, 10)
+    line = Line(0, 5, width, 5)
+    line.strokeColor = colors.HexColor("#e5e7eb")
+    line.strokeWidth = 0.5
+    d.add(line)
+    return d
 
 
-# ---------------------------------------------------------------------------
-# Pie chart builder
-# ---------------------------------------------------------------------------
 def _build_macro_pie(macro_split: dict, doc_width: float) -> Drawing:
-    """Create a macro pie chart Drawing with legend.
-
-    Parameters
-    ----------
-    macro_split:
-        ``{"protein_pct": float, "carbs_pct": float, "fat_pct": float}``
-    doc_width:
-        Available document width for sizing.
-    """
+    """Create a macro pie chart Drawing with legend."""
     drawing_width = min(doc_width, 400)
     drawing_height = 180
     d = Drawing(drawing_width, drawing_height)
@@ -203,9 +131,9 @@ def _build_macro_pie(macro_split: dict, doc_width: float) -> Drawing:
             f"{carbs:.0f}%",
             f"{fat:.0f}%",
         ]
-        pie.slices[0].fillColor = _PIE_PROTEIN
-        pie.slices[1].fillColor = _PIE_CARBS
-        pie.slices[2].fillColor = _PIE_FAT
+        pie.slices[0].fillColor = PIE_PROTEIN
+        pie.slices[1].fillColor = PIE_CARBS
+        pie.slices[2].fillColor = PIE_FAT
 
     pie.slices.strokeWidth = 0.5
     pie.slices.strokeColor = colors.white
@@ -226,9 +154,9 @@ def _build_macro_pie(macro_split: dict, doc_width: float) -> Drawing:
 
     if protein + carbs + fat > 0:
         legend.colorNamePairs = [
-            (_PIE_PROTEIN, f"Protein  ({protein:.1f}%)"),
-            (_PIE_CARBS,   f"Carbs    ({carbs:.1f}%)"),
-            (_PIE_FAT,     f"Fat      ({fat:.1f}%)"),
+            (PIE_PROTEIN, f"Protein  ({protein:.1f}%)"),
+            (PIE_CARBS,   f"Carbs    ({carbs:.1f}%)"),
+            (PIE_FAT,     f"Fat      ({fat:.1f}%)"),
         ]
     else:
         legend.colorNamePairs = [
@@ -246,38 +174,36 @@ def _build_macro_pie(macro_split: dict, doc_width: float) -> Drawing:
 def generate_report_pdf(
     product_info: dict,
     nutrients: dict,
-    insights: dict,
+    primary_goal: str,
+    ingredient_details: list[dict] | None = None,
+    how_to_use: dict | None = None,
     dv_flags: dict | None = None,
-    allergens: list[str] | None = None,
+    allergens: list[dict] | None = None,
     macro_split: dict | None = None,
 ) -> BytesIO:
     """Generate a styled PDF nutrition report and return it as a BytesIO buffer.
 
     Parameters
     ----------
-    product_info:
-        Dict with keys ``upload_id`` (int), ``image_path`` (str),
-        ``uploaded_at`` (str or datetime).
-    nutrients:
-        Dict mapping nutrient names to display strings, e.g.
-        ``{"Protein": "24 g", "Sodium": "200 mg"}``.
-    insights:
-        Dict mapping nutrient names to
-        ``{"source": "...", "usage": "..."}``.
-    dv_flags:
-        Optional dict from ``calculate_dv_flags``, e.g.
-        ``{"Sodium": {"percent_dv": 8.7, "flag": "Moderate"}}``.
-    allergens:
-        Optional list of detected allergen names, e.g. ``["Milk", "Soy"]``.
-    macro_split:
-        Optional dict from ``calculate_macro_split``, e.g.
-        ``{"protein_pct": 30.0, "carbs_pct": 45.0, "fat_pct": 25.0}``.
-
-    Returns
-    -------
-    BytesIO
-        In-memory PDF buffer, ready to be streamed.
+    product_info : dict
+        Basic upload metadata (upload_id, image_path, uploaded_at).
+    nutrients : dict
+        ``{name: "value unit"}`` dict for the nutrition table.
+    primary_goal : str
+        2-3 sentence product purpose summary from Groq.
+    ingredient_details : list[dict] | None
+        List of ``{"name", "source", "role"}`` dicts for each ingredient.
+    how_to_use : dict | None
+        ``{"product_type", "usage_instructions", "cautions"}`` from Groq.
+    dv_flags : dict | None
+        ``{name: {"percent_dv": float, "flag": str}}``.
+    allergens : list[dict] | None
+        List of detected allergens with matched ingredients.
+    macro_split : dict | None
+        ``{"protein_pct", "carbs_pct", "fat_pct"}``.
     """
+    ingredient_details = ingredient_details or []
+    how_to_use = how_to_use or {}
     dv_flags = dv_flags or {}
     allergens = allergens or []
     macro_split = macro_split or {}
@@ -287,14 +213,14 @@ def generate_report_pdf(
         buf,
         pagesize=A4,
         topMargin=25 * mm,
-        bottomMargin=25 * mm,
+        bottomMargin=30 * mm,  # extra space for footer
         leftMargin=20 * mm,
         rightMargin=20 * mm,
         title="Nutrition Analysis Report",
         author="Nutrition Label Analyzer",
     )
 
-    styles = _get_styles()
+    styles = get_report_styles()
     story: list = []
 
     # ── Derive product name from image path ──
@@ -311,48 +237,126 @@ def generate_report_pdf(
         upload_date = datetime.now().strftime("%B %d, %Y at %I:%M %p")
 
     # ==================================================================
-    # PAGE 1 — Title + Allergen Warning + Summary Table + Pie Chart
+    # PAGE 1 — Header block
     # ==================================================================
     story.append(Paragraph("Nutrition Analysis Report", styles["ReportTitle"]))
     story.append(Paragraph(
+        f"{product_name}<br/>"
         f"Upload #{upload_id}  ·  {upload_date}",
         styles["ReportSubtitle"],
     ))
+    story.append(_build_divider(doc.width))
+    story.append(Spacer(1, 16))
 
-    # ── Allergen warning box (only if allergens detected) ──
-    if allergens:
-        allergen_text = f"⚠  Contains: {', '.join(allergens)}"
-        allergen_table = Table(
-            [[Paragraph(allergen_text, styles["AllergenText"])]],
+    # ==================================================================
+    # PAGE 1 — Primary Goal Section
+    # ==================================================================
+    if primary_goal:
+        story.append(Paragraph("Product Summary", styles["SectionHeading"]))
+        goal_table = Table(
+            [[Paragraph(primary_goal, styles["GoalText"])]],
             colWidths=[doc.width],
         )
-        allergen_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), _ALLERGEN_BG),
-            ("BOX", (0, 0), (-1, -1), 1.5, _ALLERGEN_BORDER),
-            ("TOPPADDING", (0, 0), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ("LEFTPADDING", (0, 0), (-1, -1), 12),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        goal_table.setStyle(get_highlight_box_style(GOAL_BG, GOAL_BORDER))
+        story.append(goal_table)
+        story.append(Spacer(1, 20))
+
+    # ==================================================================
+    # PAGE 1 — How to Use This Product
+    # ==================================================================
+    if how_to_use:
+        story.append(Paragraph("How to Use This Product", styles["SectionHeading"]))
+
+        product_type = how_to_use.get("product_type", "Nutritional Supplement")
+        usage_instructions = how_to_use.get("usage_instructions", "")
+        cautions = how_to_use.get("cautions", "")
+
+        # Build content for the highlight box
+        content_parts = []
+        content_parts.append(
+            Paragraph(f"Product Type: {product_type}", styles["ProductTypeBadge"])
+        )
+        if usage_instructions:
+            content_parts.append(
+                Paragraph(
+                    f"<b>Recommended Usage:</b> {usage_instructions}",
+                    styles["HowToUseText"],
+                )
+            )
+        if cautions:
+            content_parts.append(
+                Paragraph(
+                    f"<b>Cautions &amp; Tips:</b> {cautions}",
+                    styles["HowToUseText"],
+                )
+            )
+
+        # Wrap all paragraphs in a single-cell table for the highlight box
+        inner_table = Table(
+            [[p] for p in content_parts],
+            colWidths=[doc.width - 28],  # account for box padding
+        )
+        inner_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
-        story.append(allergen_table)
-        story.append(Spacer(1, 12))
 
-    # ── Product info box ──
-    story.append(Paragraph(
-        f"<b>Product File:</b> {image_path}",
-        styles["ReportBody"],
-    ))
-    story.append(Spacer(1, 12))
+        outer_table = Table(
+            [[inner_table]],
+            colWidths=[doc.width],
+        )
+        outer_table.setStyle(get_highlight_box_style(HOW_TO_USE_BG, HOW_TO_USE_BORDER))
+        story.append(outer_table)
+        story.append(Spacer(1, 20))
 
-    # ── Nutrient summary table (now with %DV and Flag columns) ──
-    story.append(Paragraph("Nutrient Summary", styles["SectionHeading"]))
+    # ==================================================================
+    # PAGE 1 — Allergen Section
+    # ==================================================================
+    story.append(Paragraph("Allergen Information", styles["SectionHeading"]))
+    if allergens:
+        table_data = [["Allergen", "Matched Ingredient(s)"]]
+        for allergen_dict in allergens:
+            alg_name = allergen_dict.get("allergen", "")
+            matched_list = allergen_dict.get("matched_ingredients", [])
+            matched_str = ", ".join(matched_list)
+            table_data.append([alg_name, matched_str])
+            
+        col_widths = [doc.width * 0.40, doc.width * 0.60]
+        alg_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        alg_table.setStyle(get_allergen_table_style(len(table_data)))
+        story.append(alg_table)
+    else:
+        # Green confirmation box
+        safe_table = Table(
+            [[Paragraph("✓ No major allergens detected.", styles["NoAllergenText"])]],
+            colWidths=[doc.width],
+        )
+        safe_table.setStyle(get_highlight_box_style(NO_ALLERGEN_BG, NO_ALLERGEN_BORDER))
+        story.append(safe_table)
+
+    story.append(Spacer(1, 20))
+
+    # ==================================================================
+    # PAGE 1 — Nutrient Summary Table
+    # ==================================================================
+    story.append(Paragraph("Nutrition Summary", styles["SectionHeading"]))
 
     if nutrients:
         has_dv = bool(dv_flags)
         if has_dv:
             table_data = [["Nutrient", "Value", "%DV", "Flag"]]
+            col_widths = [
+                doc.width * 0.40,
+                doc.width * 0.25,
+                doc.width * 0.15,
+                doc.width * 0.20,
+            ]
         else:
             table_data = [["Nutrient", "Value"]]
+            col_widths = [doc.width * 0.55, doc.width * 0.45]
 
         for name, value in nutrients.items():
             row = [name, str(value)]
@@ -366,58 +370,25 @@ def generate_report_pdf(
                     row.append("—")
             table_data.append(row)
 
-        if has_dv:
-            col_widths = [
-                doc.width * 0.40,
-                doc.width * 0.25,
-                doc.width * 0.15,
-                doc.width * 0.20,
-            ]
-        else:
-            col_widths = [doc.width * 0.55, doc.width * 0.45]
-
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
-
-        # Base style commands
-        style_cmds = [
-            # Header row
-            ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
-            ("TEXTCOLOR", (0, 0), (-1, 0), _HEADER_TEXT),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 11),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
-            ("TOPPADDING", (0, 0), (-1, 0), 10),
-            # Body rows
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 1), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
-            ("TOPPADDING", (0, 1), (-1, -1), 7),
-            # Alternating row backgrounds
-            *[
-                ("BACKGROUND", (0, i), (-1, i), _ROW_ALT)
-                for i in range(2, len(table_data), 2)
-            ],
-            # Grid
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ]
-
-        # Colour-code flag cells (column index 3 when %DV columns are present)
+        
+        # Base table style
+        tstyle = get_data_table_style(len(table_data))
+        
+        # Add color overrides for flags
         if has_dv:
             flag_col = 3
             for row_idx in range(1, len(table_data)):
                 flag_val = table_data[row_idx][flag_col] if len(table_data[row_idx]) > flag_col else ""
                 if flag_val == "High":
-                    style_cmds.append(("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), _RED))
-                    style_cmds.append(("FONTNAME", (flag_col, row_idx), (flag_col, row_idx), "Helvetica-Bold"))
+                    tstyle.add("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), RED)
+                    tstyle.add("FONTNAME", (flag_col, row_idx), (flag_col, row_idx), "Helvetica-Bold")
                 elif flag_val == "Low":
-                    style_cmds.append(("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), _AMBER))
+                    tstyle.add("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), AMBER)
                 elif flag_val == "Moderate":
-                    style_cmds.append(("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), _GREEN))
-
-        table.setStyle(TableStyle(style_cmds))
+                    tstyle.add("TEXTCOLOR", (flag_col, row_idx), (flag_col, row_idx), GREEN)
+                    
+        table.setStyle(tstyle)
         story.append(table)
     else:
         story.append(Paragraph(
@@ -425,44 +396,49 @@ def generate_report_pdf(
             styles["ReportBody"],
         ))
 
-    # ── Macronutrient pie chart ──
+    story.append(Spacer(1, 20))
+
+    # ==================================================================
+    # PAGE 1 — Macronutrient pie chart
+    # ==================================================================
     if macro_split and any(v > 0 for v in macro_split.values()):
-        story.append(Spacer(1, 16))
-        story.append(Paragraph("Macronutrient Split", styles["SectionHeading"]))
+        story.append(Paragraph("Macronutrient Breakdown", styles["SectionHeading"]))
         pie_drawing = _build_macro_pie(macro_split, doc.width)
         story.append(pie_drawing)
+        story.append(Spacer(1, 20))
 
     # ==================================================================
-    # PAGE 2+ — Detailed Nutrient Breakdown
+    # PAGE 2+ — Ingredient Details
     # ==================================================================
     story.append(PageBreak())
-    story.append(Paragraph("Detailed Nutrient Breakdown", styles["SectionHeading"]))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph("Ingredient Details", styles["SectionHeading"]))
+    story.append(Spacer(1, 10))
 
-    if nutrients and insights:
-        for name, value in nutrients.items():
-            nutrient_insight = insights.get(name, {})
-            source = nutrient_insight.get("source", "Information not available.")
-            usage = nutrient_insight.get("usage", "Information not available.")
+    if ingredient_details:
+        for ing in ingredient_details:
+            name = ing.get("name", "Unknown")
+            source = ing.get("source", "Information not available.")
+            role = ing.get("role", "Information not available.")
 
-            # Nutrient subheading
             story.append(Paragraph(
-                f"<b>{name}</b>  —  {value}",
+                f"<b>{name}</b>",
                 styles["NutrientHeading"],
             ))
 
-            # Source paragraph
-            story.append(Paragraph("<b>Source:</b>", styles["ReportLabel"]))
+            # "What it is" — source / origin
+            story.append(Paragraph("<b>What it is:</b>", styles["ReportLabel"]))
             story.append(Paragraph(source, styles["ReportBody"]))
 
-            # Usage paragraph
-            story.append(Paragraph("<b>Usage in this Product:</b>", styles["ReportLabel"]))
-            story.append(Paragraph(usage, styles["ReportBody"]))
+            # "Why it's here" — functional role in this product
+            story.append(Paragraph("<b>Why it's here:</b>", styles["ReportLabel"]))
+            story.append(Paragraph(role, styles["ReportBody"]))
 
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 6))
+            story.append(_build_divider(doc.width))
+            story.append(Spacer(1, 6))
     else:
         story.append(Paragraph(
-            "<i>No detailed nutrient information available for this report.</i>",
+            "<i>No detailed ingredient information available for this report.</i>",
             styles["ReportBody"],
         ))
 
