@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
+
 from app.database import get_db
 from app.models.analysis import AnalysisResult
 from app.models.upload import Upload
@@ -46,6 +48,7 @@ router = APIRouter(prefix="/report", tags=["Reports"])
 async def download_report(
     upload_id: int,
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
 ):
     """Generate and stream a PDF nutrition report for the given upload."""
 
@@ -65,6 +68,13 @@ async def download_report(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Upload with id {upload_id} not found.",
+        )
+
+    # Verify ownership
+    if upload_record.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this report.",
         )
 
     # ------------------------------------------------------------------

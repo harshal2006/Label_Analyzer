@@ -7,15 +7,19 @@ Run with:
 Make sure the FastAPI backend is running on http://127.0.0.1:8000.
 """
 
+import os
 import re
 
 import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-API_BASE = "http://127.0.0.1:8000"
+API_BASE = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 UPLOAD_ENDPOINT = f"{API_BASE}/upload"
 HEALTH_ENDPOINT = f"{API_BASE}/health"
 REPORT_ENDPOINT = f"{API_BASE}/report"
@@ -231,10 +235,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------------------------------------------------------------------
+# Auth gate — show login page if not authenticated
+# ---------------------------------------------------------------------------
+if not st.session_state.get("access_token") or not st.session_state.get("user_id"):
+    from auth_page import show_auth_page
+    show_auth_page()
+    st.stop()
+
 
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
+def _auth_headers() -> dict:
+    """Return the Authorization header dict."""
+    return {"Authorization": f"Bearer {st.session_state['access_token']}"}
+
 
 def check_backend_health() -> bool:
     """Ping the FastAPI /health endpoint."""
@@ -248,7 +265,7 @@ def check_backend_health() -> bool:
 def upload_image(file_bytes: bytes, filename: str) -> dict:
     """POST the image to the FastAPI /upload endpoint."""
     files = {"file": (filename, file_bytes)}
-    resp = requests.post(UPLOAD_ENDPOINT, files=files, timeout=120)
+    resp = requests.post(UPLOAD_ENDPOINT, files=files, headers=_auth_headers(), timeout=120)
     resp.raise_for_status()
     return resp.json()
 
@@ -305,7 +322,17 @@ with st.sidebar:
     st.code("POST  /upload\nGET   /health\nGET   /docs", language="text")
 
     st.markdown("---")
-    st.caption("Nutrition Label Analyzer v0.1.0")
+
+    # ── Logged-in user info + Sign out ──
+    user_email = st.session_state.get("user_email", "Unknown")
+    st.markdown(f"**👤 Signed in as:**  \n`{user_email}`")
+    if st.button("🚪 Sign out", use_container_width=True):
+        for key in ("access_token", "user_id", "user_email"):
+            st.session_state.pop(key, None)
+        st.rerun()
+
+    st.markdown("---")
+    st.caption("Nutrition Label Analyzer v0.2.0")
 
 
 
@@ -426,6 +453,7 @@ with col_result:
                             try:
                                 report_resp = requests.get(
                                     f"{REPORT_ENDPOINT}/{current_upload_id}/download",
+                                    headers=_auth_headers(),
                                     timeout=120,
                                 )
                                 if report_resp.status_code == 200:
@@ -575,5 +603,3 @@ with col_result:
             </p>
         </div>
         """, unsafe_allow_html=True)
-
-

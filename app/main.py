@@ -13,12 +13,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, engine
 from app.routers import upload as upload_router
 from app.routers import report as report_router
-from app.services.storage_service import UPLOAD_DIR
+from app.routers import admin as admin_router
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -45,10 +44,6 @@ async def lifespan(app: FastAPI):
     logger.info("Creating database tables (if they don't exist)…")
     Base.metadata.create_all(bind=engine)
 
-    # Ensure the uploads directory exists.
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("Uploads directory: %s", UPLOAD_DIR)
-
     yield  # Application runs here
 
     logger.info("Shutting down…")
@@ -61,9 +56,9 @@ app = FastAPI(
     title="Nutrition Label Analyzer",
     description=(
         "Upload a nutrition / supplement label image and get back "
-        "OCR-extracted text powered by Google Cloud Vision."
+        "OCR-extracted text with AI-powered ingredient analysis."
     ),
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
     docs_url="/docs",        # Swagger UI
     redoc_url="/redoc",      # ReDoc alternative
@@ -86,12 +81,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(upload_router.router)
 app.include_router(report_router.router)
-
-# ---------------------------------------------------------------------------
-# Static files – serve uploaded images (development only)
-# ---------------------------------------------------------------------------
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.include_router(admin_router.router)
 
 
 # ---------------------------------------------------------------------------

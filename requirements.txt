@@ -31,3 +31,7 @@ reportlab>=4.0
 # Streamlit UI
 streamlit>=1.45.0
 requests>=2.32.0
+
+# Supabase (storage + auth)
+supabase==1.2.0
+python-jose[cryptography]>=3.3.0

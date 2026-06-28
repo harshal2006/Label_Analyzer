@@ -27,11 +27,15 @@ DATABASE_URL: str = os.getenv("DATABASE_URL", _DEFAULT_DB_URL)
 # ---------------------------------------------------------------------------
 # Engine & session
 # ---------------------------------------------------------------------------
+_connect_args: dict = {}
+if DATABASE_URL.startswith("sqlite"):
+    _connect_args["check_same_thread"] = False
+
 engine = create_engine(
     DATABASE_URL, 
     echo=False, 
     pool_pre_ping=True,
-    connect_args={"check_same_thread": False}
+    connect_args=_connect_args,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
