@@ -14,10 +14,16 @@ import requests
 import streamlit as st
 import pandas as pd
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return os.getenv(key)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-API_BASE = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+API_BASE = get_secret("BACKEND_URL") or "http://127.0.0.1:8000"
 ADMIN_UPLOADS_ENDPOINT = f"{API_BASE}/admin/uploads"
 REPORT_ENDPOINT = f"{API_BASE}/report"
 

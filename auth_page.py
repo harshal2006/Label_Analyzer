@@ -18,8 +18,14 @@ from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
-SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return os.getenv(key)
+
+SUPABASE_URL: str = get_secret("SUPABASE_URL") or ""
+SUPABASE_ANON_KEY: str = get_secret("SUPABASE_ANON_KEY") or ""
 
 # Debug: confirm env vars are loaded (remove after fix is confirmed)
 logger.info("SUPABASE_URL first 10: %s", SUPABASE_URL[:10])

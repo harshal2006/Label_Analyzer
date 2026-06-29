@@ -17,10 +17,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def get_secret(key):
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return os.getenv(key)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-API_BASE = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+API_BASE = get_secret("BACKEND_URL") or "http://127.0.0.1:8000"
 UPLOAD_ENDPOINT = f"{API_BASE}/upload"
 HEALTH_ENDPOINT = f"{API_BASE}/health"
 REPORT_ENDPOINT = f"{API_BASE}/report"
