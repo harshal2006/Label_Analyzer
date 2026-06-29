@@ -18,6 +18,7 @@ from app.database import Base, engine
 from app.routers import upload as upload_router
 from app.routers import report as report_router
 from app.routers import admin as admin_router
+from app.routers import label_checker as label_checker_router
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -82,6 +83,7 @@ app.add_middleware(
 app.include_router(upload_router.router)
 app.include_router(report_router.router)
 app.include_router(admin_router.router)
+app.include_router(label_checker_router.router)
 
 
 # ---------------------------------------------------------------------------

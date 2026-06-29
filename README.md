@@ -1,193 +1,112 @@
-# 🏷️ Nutrition Label Analyzer
+# Nutrition Label Analyzer
+An AI-powered nutrition label analysis platform
 
-A full-stack application that accepts images of nutrition / supplement labels, extracts text via **local OCR (PaddleOCR)**, analyses ingredients using **Groq LLM**, and generates downloadable **PDF reports**.
+The app lets users upload nutrition label images, extracts text using OCR, analyzes nutrients and ingredients using AI, and generates a downloadable PDF report. Built with a focus on accuracy, safety, and per-user data isolation.
 
----
+## Features
 
-## Table of Contents
-
-1. [Project Overview](#project-overview)
-2. [Tech Stack](#tech-stack)
-3. [Folder Structure](#folder-structure)
-4. [Setup Instructions](#setup-instructions)
-5. [Environment Variables](#environment-variables)
-6. [Running the Application](#running-the-application)
-7. [API Usage Examples](#api-usage-examples)
-8. [Database Schema](#database-schema)
-
----
-
-## Project Overview
-
-A user uploads an image of a supplement or food nutrition label via a Streamlit UI. The system:
-
-1. **Accepts** the image and saves it locally.
-2. **Runs OCR** locally using PaddleOCR to extract text.
-3. **Parses** nutrients and their values from the OCR text.
-4. **Analyses** ingredients via the Groq LLM API to determine health scores, warnings, functional roles, and natural sources.
-5. **Infers** product type and generates practical "How to Use" guidelines and cautions.
-6. **Stores** the metadata, raw OCR, and analysis in a SQLite database.
-7. **Displays** a clean, rich UI with health scores, risk flags, and an inline PDF report download. Raw debug output is hidden behind a clean tabbed view.
-8. **Generates** a downloadable PDF report with macro split charts, allergen tables, "How to Use" guidelines, and detailed ingredient breakdowns.
-
----
+- Nutrition label OCR using PaddleOCR (PP-OCRv6)
+- AI-powered nutrient and ingredient analysis via Groq API (llama-3.3-70b-versatile)
+- Downloadable PDF report with nutrient breakdown, ingredient origins, allergen detection, and %DV calculations
+- Label Compliance Checker — checks which mandatory fields are visible on the label
+- Per-user authentication via Supabase Auth (ES256 JWT)
+- Cloud image storage via Supabase Storage
+- Data Management Tool (DMT) — view, download, and delete past uploads
+- Allergen detection using rule-based logic (not LLM) for reliability
+- FDA-standard %DV calculations (rule-based)
+- Macronutrient pie chart in PDF report
+- Dark mode compatible UI
 
 ## Tech Stack
 
-| Component          | Technology                   |
-|--------------------|------------------------------|
-| Language           | Python 3.12                  |
-| Backend            | FastAPI                      |
-| Frontend           | Streamlit                    |
-| Database           | SQLite                       |
-| ORM                | SQLAlchemy 2.x               |
-| Validation         | Pydantic v2                  |
-| OCR                | PaddleOCR                    |
-| AI Analysis        | Groq API (llama-3.3-70b-versatile) |
-| PDF Generation     | ReportLab                    |
-| Server             | Uvicorn                      |
+| Component | Technology |
+| --- | --- |
+| Backend | FastAPI |
+| Frontend | Streamlit |
+| OCR | PaddleOCR (PP-OCRv6) |
+| AI/LLM | Groq API (llama-3.3-70b-versatile) |
+| Database | PostgreSQL via SQLAlchemy (hosted on Supabase) |
+| Auth | Supabase Auth (ES256 JWT + JWKS verification) |
+| Storage | Supabase Storage |
+| PDF Generation | ReportLab |
+| Deployment | Render (backend) + Streamlit Cloud (frontend) |
 
----
-
-## Folder Structure
+## Project Structure
 
 ```
 nutrition-label-analyzer/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app entry point
-│   ├── database.py          # SQLAlchemy engine, session, Base
-│   ├── routers/
-│   │   ├── upload.py        # POST /upload endpoint
-│   │   └── report.py        # GET /report/{id}/download endpoint
-│   ├── models/
-│   │   ├── user.py          # User ORM model
-│   │   ├── upload.py        # Upload ORM model
-│   │   └── analysis.py      # AnalysisResult ORM model
-│   ├── schemas/
-│   │   └── upload.py        # Pydantic validation schemas
-│   ├── utils/
-│   │   ├── nutrition_reference.py # DV values & common allergens
-│   │   └── pdf_styles.py          # Centralized PDF styling & colors
-│   └── services/
-│       ├── ocr_service.py      # Local PaddleOCR wrapper
-│       ├── analysis_service.py # Groq LLM integration
-│       ├── groq_service.py     # Groq batched nutrient insights
-│       ├── pdf_service.py      # PDF generation using ReportLab
-│       └── storage_service.py  # Image storage
-├── uploads/                 # Uploaded images (git-ignored)
-├── streamlit_app.py         # Streamlit UI frontend
-├── requirements.txt
 ├── .env.example
-├── .env                     # Your local config (git-ignored)
-└── README.md
+├── README.md
+├── requirements.txt
+├── app/
+│   ├── auth.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models/
+│   ├── routers/
+│   │   ├── admin.py
+│   │   ├── label_checker.py
+│   │   ├── report.py
+│   │   └── upload.py
+│   ├── schemas/
+│   ├── services/
+│   └── utils/
+├── pages/
+├── auth_page.py
+└── streamlit_app.py
 ```
-
----
 
 ## Setup Instructions
 
-### 1. Clone the repository
-
-```bash
-git clone <repo-url>
-cd nutrition-label-analyzer
-```
-
-### 2. Create a virtual environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate      # macOS / Linux
-# venv\Scripts\activate       # Windows
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env with your Groq API key and database URL
-```
-
----
+1. Clone the repo
+2. Create and activate virtual environment
+3. Install dependencies: `pip install -r requirements.txt`
+4. Copy `.env.example` to `.env` and fill in values
+5. Run backend: `uvicorn app.main:app --reload`
+6. Run frontend: `streamlit run streamlit_app.py`
 
 ## Environment Variables
 
-| Variable          | Required | Description                              |
-|-------------------|----------|------------------------------------------|
-| `DATABASE_URL`    | No       | SQLite URL (default: `sqlite:///./nutrition_label.db`) |
-| `GROQ_API_KEY`    | Yes      | API key for Groq LLM analysis            |
+| Variable | Description | Where to find it |
+| --- | --- | --- |
+| SUPABASE_URL | Base URL of your Supabase project | Settings > General |
+| SUPABASE_ANON_KEY | Legacy anon public key (eyJhbG... format) | Settings > API Keys > Legacy tab |
+| SUPABASE_SERVICE_KEY | Legacy service_role secret key | Settings > API Keys > Legacy tab |
+| DATABASE_URL | PostgreSQL connection string | Supabase Dashboard > Connect button > Direct |
+| GROQ_API_KEY | Groq API key for LLM analysis | console.groq.com |
 
----
+## Supabase Setup
 
-## Running the Application
+- Create a Supabase project
+- Use legacy API key format (eyJhbG...) not the new sb_publishable format
+- Create a private storage bucket called label-images
+- Enable Email provider under Authentication > Providers
+- JWT verification uses ES256 via JWKS endpoint, not HS256
 
-This project uses a decoupled architecture. You need to run both the FastAPI backend and the Streamlit frontend.
+## API Endpoints
 
-### 1. Start the FastAPI Backend
+| Method | Endpoint | Auth Required | Description |
+| --- | --- | --- | --- |
+| GET | /health | No | Health check |
+| POST | /upload | Yes | Upload and analyze a label image |
+| GET | /report/{upload_id}/download | Yes | Download PDF report |
+| GET | /admin/uploads | Yes | List all uploads for current user |
+| DELETE | /admin/uploads/{upload_id} | Yes | Delete an upload and its files |
+| POST | /check-label | Yes | Run compliance check on a label image |
 
-```bash
-uvicorn app.main:app --reload
-```
-The API server starts at: **http://127.0.0.1:8000**
-Interactive API docs: **http://127.0.0.1:8000/docs**
+## Architecture Note
 
-### 2. Start the Streamlit Frontend
+Safety-critical features (allergen detection, %DV calculations) use deterministic rule-based logic rather than LLM generation to avoid hallucination risk. LLM is only used for contextual analysis (ingredient origins, usage context, product summary) where minor inaccuracies are acceptable.
 
-In a new terminal window (ensure your virtual environment is activated):
+## Deployment
 
-```bash
-streamlit run streamlit_app.py
-```
-The UI opens in your browser at: **http://localhost:8501**
+### Backend
 
----
+Deploy to Render as a web service. 
+Build command: `pip install -r requirements.txt`
+Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+Add all .env variables in Render's environment settings.
 
-## API Usage Examples
+### Frontend
 
-### Health Check
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-### Upload & Analyze Image
-
-```bash
-curl -X POST http://127.0.0.1:8000/upload \
-  -F "file=@/path/to/nutrition-label.jpg"
-```
-
-### Download PDF Report
-
-```bash
-curl -O -J http://127.0.0.1:8000/report/1/download
-```
-
----
-
-## Database Schema
-
-```
-┌──────────────┐       ┌──────────────┐       ┌───────────────────┐
-│    users     │       │   uploads    │       │ analysis_results  │
-├──────────────┤       ├──────────────┤       ├───────────────────┤
-│ id (PK)      │◄──┐   │ id (PK)      │◄──┐   │ id (PK)           │
-│ name         │   └───│ user_id (FK) │   └───│ upload_id (FK)    │
-│ email        │       │ image_path   │       │ ocr_text          │
-│ created_at   │       │ uploaded_at  │       │ analysis_json     │
-└──────────────┘       └──────────────┘       │ created_at        │
-                                              └───────────────────┘
-```
-
----
-
-## License
-
-Internal project – Internship 2026.
+Deploy to Streamlit Community Cloud. Connect GitHub repo, set main file to `streamlit_app.py`, add `BACKEND_URL` as a secret pointing to your Render URL.

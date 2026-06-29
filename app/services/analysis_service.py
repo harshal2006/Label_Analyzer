@@ -141,3 +141,79 @@ def analyze_ingredients(ocr_text: str) -> dict | None:
     except Exception as exc:
         logger.exception("Groq API call failed: %s", exc)
         return None
+
+# ---------------------------------------------------------------------------
+# Compliance Checker
+# ---------------------------------------------------------------------------
+
+COMPLIANCE_PROMPT = """You are a nutrition label analyst. Analyze the following text extracted from a nutrition label image. For each mandatory field, determine if it is clearly visible and present in the extracted text. Respond ONLY with a valid JSON object, no other text:
+
+{{
+  "fields": [
+    {{"name": "Serving Size", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Calories per Serving", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Total Fat", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Total Carbohydrates", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Protein", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Sodium", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Allergen Declaration", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Manufacturer Information", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Expiry Date / Best Before", "found": true, "note": "what was found or what appears to be missing"}},
+    {{"name": "Ingredients List", "found": true, "note": "what was found or what appears to be missing"}}
+  ],
+  "summary": "A friendly 2-3 sentence summary of what the label covers well and what information could not be found in the image."
+}}
+
+Important: if a field is not found, do not say the label is non-compliant. Say it was not visible in the image — it may be on another part of the label.
+
+Extracted label text:
+{ocr_text}"""
+
+def check_label_compliance(ocr_text: str) -> dict | None:
+    """Send OCR text to Groq for compliance checking."""
+    if _client is None:
+        logger.warning("Groq client not initialized — skipping compliance check.")
+        return None
+
+    if not ocr_text or len(ocr_text.strip()) < 10:
+        return {
+            "fields": [],
+            "summary": "Insufficient text extracted from the image for analysis."
+        }
+
+    prompt = COMPLIANCE_PROMPT.format(ocr_text=ocr_text)
+
+    try:
+        logger.info("Sending OCR text to Groq for compliance check…")
+        chat_completion = _client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.1,
+            max_tokens=2048,
+        )
+
+        raw_response = chat_completion.choices[0].message.content
+        logger.info("Groq response received (%d chars).", len(raw_response))
+
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```"):
+            first_newline = cleaned.index("\n")
+            cleaned = cleaned[first_newline + 1 :]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        return json.loads(cleaned)
+
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse Groq response as JSON: %s", exc)
+        return None
+    except Exception as exc:
+        logger.exception("Groq API call failed: %s", exc)
+        return None
+

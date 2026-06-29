@@ -29,7 +29,7 @@ logger.info("SUPABASE_ANON_KEY first 10: %s", SUPABASE_ANON_KEY[:10])
 def _get_supabase_client():
     """Return a Supabase client initialised with the anon key."""
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        st.error("⚠️ SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env")
+        st.error("WARNING: SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env")
         st.stop()
     # Debug: log what we're passing to create_client
     logger.info("Creating Supabase client with URL=%s... KEY=%s...", SUPABASE_URL[:10], SUPABASE_ANON_KEY[:10])
@@ -44,13 +44,10 @@ def show_auth_page():
     st.markdown(
         """
         <div style="text-align: center; padding: 3rem 0 1rem;">
-            <h1 style="font-size: 2.4rem; font-weight: 800;
-                        background: linear-gradient(135deg, #818cf8, #06d6a0);
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;">
-                🏷️ Nutrition Label Analyzer
+            <h1 style="font-size: 2.4rem; font-weight: 800; color: var(--primary);">
+                Nutrition Label Analyzer
             </h1>
-            <p style="color: #a0a0b8; font-size: 1.05rem;">Sign in to continue</p>
+            <p style="color: var(--text-color); font-size: 1.05rem;">Sign in to continue</p>
         </div>
         """,
         unsafe_allow_html=True,

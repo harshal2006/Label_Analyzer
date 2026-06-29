@@ -12,6 +12,7 @@ import os
 
 import requests
 import streamlit as st
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -22,7 +23,6 @@ REPORT_ENDPOINT = f"{API_BASE}/report"
 
 st.set_page_config(
     page_title="Data Management Tool",
-    page_icon="🗂️",
     layout="wide",
 )
 
@@ -42,25 +42,34 @@ def _auth_headers() -> dict:
 # ---------------------------------------------------------------------------
 # Page header
 # ---------------------------------------------------------------------------
-st.markdown("## 🗂️ Data Management Tool")
-st.caption("View, download reports for, or delete your uploaded nutrition labels.")
-st.markdown("---")
+st.markdown("""
+<div style="text-align: center; padding: 1.5rem 0 1rem;">
+    <h1 style="font-size: 2.6rem; font-weight: 800; color: var(--primary); margin-bottom: 0.3rem;">Data Management Tool</h1>
+    <p style="color: var(--text-color); font-size: 1.1rem; font-weight: 400;">View, download reports for, or delete your uploaded nutrition labels.</p>
+</div>
+<div style="height: 2px; background: linear-gradient(90deg, transparent, #66BB6A, transparent); margin: 1rem 0 2rem 0;"></div>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Fetch uploads
 # ---------------------------------------------------------------------------
+col_title, col_refresh = st.columns([5, 1])
+with col_refresh:
+    # Adding a refresh button at the top right
+    st.button("Refresh Data", use_container_width=True)
+
 try:
     resp = requests.get(ADMIN_UPLOADS_ENDPOINT, headers=_auth_headers(), timeout=15)
     resp.raise_for_status()
     uploads = resp.json()
 except requests.ConnectionError:
-    st.error("❌ Could not connect to the backend. Is the FastAPI server running?")
+    st.error("Could not connect to the backend. Is the FastAPI server running?")
     st.stop()
 except requests.HTTPError as exc:
-    st.error(f"❌ Failed to load uploads: {exc.response.status_code} — {exc.response.text[:300]}")
+    st.error(f"Failed to load uploads: {exc.response.status_code} — {exc.response.text[:300]}")
     st.stop()
 except Exception as exc:
-    st.error(f"❌ Unexpected error: {exc}")
+    st.error(f"Unexpected error: {exc}")
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -70,9 +79,22 @@ if not uploads:
     st.info("No uploads yet. Head to the main page to upload a nutrition label image.")
     st.stop()
 
-# Summary table
-import pandas as pd
+# ---------------------------------------------------------------------------
+# Summary row
+# ---------------------------------------------------------------------------
+total_uploads = len(uploads)
+total_reports = sum(1 for u in uploads if u["status"] == "analysed")
 
+m1, m2 = st.columns(2)
+m1.metric("Total Uploads", total_uploads)
+m2.metric("Reports Generated", total_reports)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Summary table
+# ---------------------------------------------------------------------------
+st.markdown("### Uploads History")
 df = pd.DataFrame(
     [
         {
@@ -91,6 +113,7 @@ st.markdown("---")
 # ---------------------------------------------------------------------------
 # Per-upload actions
 # ---------------------------------------------------------------------------
+st.markdown("### Actions")
 for upload in uploads:
     uid = upload["id"]
     filename = upload["filename"]
@@ -99,12 +122,12 @@ for upload in uploads:
     col_info, col_download, col_delete = st.columns([4, 2, 2])
 
     with col_info:
-        status_icon = "✅" if status == "analysed" else "⏳"
+        status_icon = "[Analysed]" if status == "analysed" else "[Pending]"
         st.markdown(f"**#{uid}** — {filename}  {status_icon} _{status}_")
 
     with col_download:
         if status == "analysed":
-            if st.button("📄 Download report", key=f"dl_{uid}", use_container_width=True):
+            if st.button("Download report", key=f"dl_{uid}", use_container_width=True):
                 try:
                     report_resp = requests.get(
                         f"{REPORT_ENDPOINT}/{uid}/download",
@@ -113,7 +136,7 @@ for upload in uploads:
                     )
                     if report_resp.status_code == 200:
                         st.download_button(
-                            label="⬇️ Save PDF",
+                            label="Save PDF",
                             data=report_resp.content,
                             file_name=f"report_{uid}.pdf",
                             mime="application/pdf",
@@ -127,7 +150,7 @@ for upload in uploads:
             st.caption("Analysis pending")
 
     with col_delete:
-        if st.button("🗑️ Delete", key=f"del_{uid}", use_container_width=True):
+        if st.button("Delete", key=f"del_{uid}", use_container_width=True):
             try:
                 del_resp = requests.delete(
                     f"{ADMIN_UPLOADS_ENDPOINT}/{uid}",
