@@ -15,14 +15,20 @@ from paddleocr import PaddleOCR
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Singleton model – loaded once on first import
+# Singleton model – loaded lazily on first OCR request
 # ---------------------------------------------------------------------------
 # Suppress noisy PaddleOCR / PaddlePaddle logs
 logging.getLogger("ppocr").setLevel(logging.WARNING)
 
-logger.info("Loading PaddleOCR model (this may take a moment on first run)…")
-_ocr = PaddleOCR(use_textline_orientation=True, lang="en")
-logger.info("PaddleOCR model loaded successfully.")
+_ocr_instance = None
+
+def get_ocr() -> PaddleOCR:
+    global _ocr_instance
+    if _ocr_instance is None:
+        logger.info("Loading PaddleOCR model (this may take a moment on first run)…")
+        _ocr_instance = PaddleOCR(use_textline_orientation=True, lang="en")
+        logger.info("PaddleOCR model loaded successfully.")
+    return _ocr_instance
 
 # ---------------------------------------------------------------------------
 # Known nutrient names (matched case-insensitively)
@@ -273,7 +279,8 @@ def extract_text(image_path: str) -> dict:
         img = cv2.resize(img, (new_w, new_h))
         logger.info(f"Resized image from {w}x{h} to {new_w}x{new_h} for faster OCR processing")
 
-    result = _ocr.ocr(img)
+    ocr = get_ocr()
+    result = ocr.ocr(img)
 
     if not result or result[0] is None:
         raise RuntimeError("PaddleOCR returned no results for the image.")
