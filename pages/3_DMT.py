@@ -17,7 +17,7 @@ import pandas as pd
 def get_secret(key):
     try:
         return st.secrets[key]
-    except (KeyError, FileNotFoundError):
+    except (KeyError, FileNotFoundError, Exception):
         return os.getenv(key)
 
 # ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def get_secret(key):
     try:
         return st.secrets[key]
-    except (KeyError, FileNotFoundError):
+    except (KeyError, FileNotFoundError, Exception):
         return os.getenv(key)
 
 SUPABASE_URL: str = get_secret("SUPABASE_URL") or ""
@@ -45,9 +45,6 @@ def _get_supabase_client():
 
 def show_auth_page():
     """Render the login / signup page and block further execution."""
-    st.write("SUPABASE_URL from secrets:", bool(st.secrets.get("SUPABASE_URL")))
-    st.write("SUPABASE_ANON_KEY from secrets:", bool(st.secrets.get("SUPABASE_ANON_KEY")))
-    st.write("SUPABASE_URL from env:", bool(os.getenv("SUPABASE_URL")))
 
     # ── Centered header ──
     st.markdown(
