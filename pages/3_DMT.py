@@ -27,10 +27,7 @@ API_BASE = get_secret("BACKEND_URL") or "http://127.0.0.1:8000"
 ADMIN_UPLOADS_ENDPOINT = f"{API_BASE}/admin/uploads"
 REPORT_ENDPOINT = f"{API_BASE}/report"
 
-st.set_page_config(
-    page_title="Data Management Tool",
-    layout="wide",
-)
+
 
 # ---------------------------------------------------------------------------
 # Auth guard — redirect to main page if not logged in

@@ -24,10 +24,7 @@ API_BASE = get_secret("BACKEND_URL") or "http://127.0.0.1:8000"
 CHECK_ENDPOINT = f"{API_BASE}/check-label"
 ALLOWED_TYPES = ["jpg", "jpeg", "png", "webp"]
 
-st.set_page_config(
-    page_title="Label Compliance Checker",
-    layout="wide",
-)
+
 
 # ---------------------------------------------------------------------------
 # Auth guard — redirect to main page if not logged in
