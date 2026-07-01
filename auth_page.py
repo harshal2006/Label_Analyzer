@@ -50,10 +50,10 @@ def show_auth_page():
     st.markdown(
         """
         <div style="text-align: center; padding: 3rem 0 1rem;">
-            <h1 style="font-size: 2.4rem; font-weight: 800; color: var(--primary);">
+            <h1 style="font-family: 'DM Sans', sans-serif; font-size: 2.4rem; font-weight: 700; color: #1C1C1E; letter-spacing: -0.01em;">
                 Nutrition Label Analyzer
             </h1>
-            <p style="color: var(--text-color); font-size: 1.05rem;">Sign in to continue</p>
+            <p style="color: #8E8E93; font-size: 1.05rem;">Sign in to continue</p>
         </div>
         """,
         unsafe_allow_html=True,

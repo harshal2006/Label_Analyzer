@@ -37,74 +37,89 @@ ALLOWED_TYPES = ["jpg", "jpeg", "png", "webp"]
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Nutrabay Label Analyzer",
+    page_title="Nutrition Label Analyzer",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS for a professional green/white look
+# Custom CSS — editorial clinical-warm palette
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* ── Google Font ── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    /* ── Google Fonts ── */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
-    /* ── Root variables (Light Green/White Theme) ── */
+    /* ── Root variables (Charcoal + Terracotta) ── */
     :root {
-        --primary: #2E7D32;
-        --primary-light: #4CAF50;
-        --primary-dark: #1B5E20;
-        --accent: #66BB6A;
-        --accent-dark: #388E3C;
-        
-        
-        
-        
-        
-        
-        --success: #2e7d32;
-        --error: #d32f2f;
-        --warning: #f57c00;
+        --primary: #C2553A;
+        --primary-light: #D4785C;
+        --primary-dark: #9E3F27;
+        --accent: #D4785C;
+        --accent-dark: #9E3F27;
+
+        --text-heading: #1C1C1E;
+        --text-body: #3A3A3C;
+        --text-muted: #8E8E93;
+        --surface: #F5F3F0;
+        --surface-warm: #FBF7F4;
+        --border-subtle: rgba(28, 28, 30, 0.08);
+
+        --success: #2D7D46;
+        --error: #C23838;
+        --warning: #D4883A;
     }
 
-    /* ── Global ── */
+    /* ── Global typography ── */
     html, body, [data-testid="stAppViewContainer"] {
-        font-family: 'Inter', sans-serif !important;
-        
-        
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        color: var(--text-body);
+    }
+
+    h1, h2, h3, h4, h5, h6,
+    [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3 {
+        font-family: 'DM Sans', sans-serif !important;
+        color: var(--text-heading);
     }
 
     /* ── Sidebar Branding ── */
     .sidebar-brand {
-        font-size: 2.2rem;
-        font-weight: 800;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 700;
         color: var(--primary);
-        margin-bottom: 0.2rem;
-        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.15rem;
     }
     .sidebar-tagline {
-        font-size: 0.9rem;
-        color: var(--text-color);
-        font-weight: 500;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        font-weight: 400;
         margin-bottom: 1.5rem;
+        letter-spacing: 0.01em;
     }
 
     /* ── Main header ── */
     .main-header {
         text-align: center;
-        padding: 1.5rem 0 1rem;
+        padding: 2rem 0 1rem;
     }
     .main-header h1 {
-        font-size: 2.6rem;
-        font-weight: 800;
-        color: var(--primary);
-        margin-bottom: 0.3rem;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: var(--text-heading);
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.01em;
     }
     .main-header p {
-        color: var(--text-color);
-        font-size: 1.1rem;
+        color: var(--text-muted);
+        font-size: 1.05rem;
         font-weight: 400;
     }
 
@@ -113,59 +128,86 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        padding: 0.35rem 0.85rem;
-        border-radius: 999px;
-        font-size: 0.82rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
         font-weight: 600;
         letter-spacing: 0.02em;
+        font-family: 'Inter', sans-serif;
     }
     .status-online {
-        background: transparent;
-        color: var(--primary);
-        border: 1px solid var(--primary);
+        background: rgba(45, 125, 70, 0.08);
+        color: var(--success);
+        border: 1px solid rgba(45, 125, 70, 0.25);
     }
     .status-offline {
-        background: transparent;
+        background: rgba(194, 56, 56, 0.08);
         color: var(--error);
-        border: 1px solid var(--error);
+        border: 1px solid rgba(194, 56, 56, 0.25);
     }
 
     /* ── Info box ── */
     .info-box {
-        background: var(--secondary-background-color);
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 12px;
+        background: var(--surface-warm);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
         padding: 1rem 1.2rem;
         margin: 0.8rem 0;
         font-size: 0.95rem;
-        color: var(--text-color);
+        color: var(--text-body);
     }
 
     /* ── Upload area styling ── */
     [data-testid="stFileUploader"] {
-        border-radius: 12px;
-        border: 1px dashed var(--accent);
+        border-radius: 10px;
+        border: 1.5px dashed rgba(194, 85, 58, 0.3);
         padding: 1rem;
-        background-color: var(--secondary-background-color);
+        background-color: var(--surface-warm);
     }
 
     /* ── Sidebar styling ── */
     [data-testid="stSidebar"] {
-        border-right: 1px solid rgba(128, 128, 128, 0.2);
-        
+        border-right: 1px solid var(--border-subtle);
     }
 
     /* ── Divider ── */
     .styled-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--border-subtle), rgba(194, 85, 58, 0.2), var(--border-subtle), transparent);
         margin: 1rem 0 2rem 0;
     }
-    
+
     .sidebar-divider {
         height: 1px;
-        background: rgba(128, 128, 128, 0.2);
+        background: var(--border-subtle);
         margin: 1.5rem 0;
+    }
+
+    /* ── Streamlit metric overrides ── */
+    [data-testid="stMetricLabel"] {
+        font-family: 'Inter', sans-serif !important;
+        color: var(--text-muted) !important;
+        font-size: 0.82rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    [data-testid="stMetricValue"] {
+        font-family: 'DM Sans', sans-serif !important;
+        color: var(--text-heading) !important;
+    }
+
+    /* ── Button refinements ── */
+    .stButton > button[kind="primary"] {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        border-radius: 8px;
+    }
+
+    /* ── Streamlit tab overrides ── */
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -204,10 +246,11 @@ def upload_image(file_bytes: bytes, filename: str) -> dict:
     resp.raise_for_status()
     return resp.json()
 
-def parse_nutrient_value(value_str: str) -> tuple[str, str | None]:
+def parse_nutrient_value(value_str: str | float) -> tuple[str, str | None]:
     """
     Split a string like '25g 10% DV' into ('25g', '10% DV')
     """
+    value_str = str(value_str) if value_str is not None else ""
     match = re.search(r'([\d.,]+(?:mcg|mg|g|kcal|%))?\s*(\d+%\s*DV)?', value_str, re.IGNORECASE)
     if match:
         val = match.group(1) or value_str
@@ -223,7 +266,7 @@ def parse_nutrient_value(value_str: str) -> tuple[str, str | None]:
 # Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown('<div class="sidebar-brand">Nutrabay</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-brand">Label Analyzer</div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-tagline">AI-Powered Nutrition Analysis</div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
 

@@ -46,9 +46,9 @@ def _auth_headers() -> dict:
 # Page header
 # ---------------------------------------------------------------------------
 st.markdown("""
-<div style="text-align: center; padding: 1.5rem 0 1rem;">
-    <h1 style="font-size: 2.6rem; font-weight: 800; color: var(--primary); margin-bottom: 0.3rem;">Label Compliance Checker</h1>
-    <p style="color: var(--text-color); font-size: 1.1rem; font-weight: 400;">Check if your nutrition label meets mandatory declaration requirements</p>
+<div style="text-align: center; padding: 2rem 0 1rem;">
+    <h1 style="font-family: 'DM Sans', sans-serif; font-size: 2.4rem; font-weight: 700; color: #1C1C1E; margin-bottom: 0.4rem; letter-spacing: -0.01em;">Label Compliance Checker</h1>
+    <p style="color: #8E8E93; font-size: 1.05rem; font-weight: 400;">Check if your nutrition label meets mandatory declaration requirements</p>
 </div>
 """, unsafe_allow_html=True)
 st.divider()

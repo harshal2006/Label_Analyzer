@@ -24,6 +24,7 @@ from app.services.nutrition_analysis import (
     calculate_macro_split,
     detect_allergens,
 )
+from app.services.health_score import calculate_health_score
 
 logger = logging.getLogger(__name__)
 
@@ -128,13 +129,7 @@ async def download_report(
     macro_split = calculate_macro_split(nutrients_dict)
 
     # ------------------------------------------------------------------
-    # 5. Detect allergens from OCR text
-    # ------------------------------------------------------------------
-    ocr_text = analysis_record.ocr_text or ""
-    allergens = detect_allergens(ocr_text)
-
-    # ------------------------------------------------------------------
-    # 6. Extract ingredient names from the stored analysis
+    # 5. Extract ingredient names from the stored analysis
     # ------------------------------------------------------------------
     ingredient_names: list[str] = []
     try:
@@ -145,6 +140,17 @@ async def download_report(
         ]
     except Exception as exc:
         logger.warning("Could not extract ingredient names: %s", exc)
+
+    # ------------------------------------------------------------------
+    # 6. Detect allergens from OCR text, using names for prominence
+    # ------------------------------------------------------------------
+    ocr_text = analysis_record.ocr_text or ""
+    allergens = detect_allergens(ocr_text, ingredient_names)
+
+    # ------------------------------------------------------------------
+    # 6b. Calculate deterministic health score
+    # ------------------------------------------------------------------
+    health_score, health_reasoning = calculate_health_score(nutrients_dict, ingredient_names)
 
     # ------------------------------------------------------------------
     # 7. Get Groq report insights (defensive — never crashes)
@@ -196,6 +202,8 @@ async def download_report(
             dv_flags=dv_flags,
             allergens=allergens,
             macro_split=macro_split,
+            health_score=health_score,
+            health_reasoning=health_reasoning,
         )
     except Exception as exc:
         logger.exception("PDF generation failed for upload %d", upload_id)

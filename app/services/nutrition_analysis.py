@@ -83,13 +83,15 @@ def calculate_dv_flags(nutrients: dict[str, str]) -> dict[str, dict]:
 # 2. Allergen detection
 # ---------------------------------------------------------------------------
 
-def detect_allergens(ingredient_text: str) -> list[dict]:
-    """Detect major allergens in an ingredient / OCR text.
+def detect_allergens(ingredient_text: str, ingredient_names: list[str] = None) -> list[dict]:
+    """Detect major allergens in an ingredient / OCR text and assess prominence.
 
     Parameters
     ----------
     ingredient_text:
         Raw text (e.g. full OCR dump or ingredient list).
+    ingredient_names:
+        Optional ordered list of extracted ingredient names to determine prominence.
 
     Returns
     -------
@@ -97,6 +99,7 @@ def detect_allergens(ingredient_text: str) -> list[dict]:
         A list of dictionaries, each containing:
         - "allergen": Display-friendly allergen name.
         - "matched_ingredients": List of specific synonyms/keywords found.
+        - "prominence": "Major" or "Minor/Trace"
         Empty list if text is empty or no allergens found.
     """
     if not ingredient_text or not ingredient_text.strip():
@@ -104,19 +107,38 @@ def detect_allergens(ingredient_text: str) -> list[dict]:
 
     text_lower = ingredient_text.lower()
     detected: list[dict] = []
+    
+    # Heuristics for primary sources that should always be Major
+    primary_source_keywords = ["whey", "milk", "egg", "peanut", "soybean", "wheat", "cashew", "almond"]
 
     for entry in COMMON_ALLERGENS:
         allergen_name = entry["name"]
         matched_synonyms = []
+        is_major = False
+
         for keyword in entry["keywords"]:
             if keyword in text_lower:
                 if keyword not in matched_synonyms:
                     matched_synonyms.append(keyword)
+                
+                # Check for absolute primary keywords
+                if keyword in primary_source_keywords:
+                    is_major = True
+                
+                # Check position if ingredient_names is provided
+                if not is_major and ingredient_names:
+                    # Look in the top 3 ingredients
+                    top_n = ingredient_names[:3]
+                    for top_ing in top_n:
+                        if keyword in top_ing.lower():
+                            is_major = True
+                            break
         
         if matched_synonyms:
             detected.append({
                 "allergen": allergen_name,
                 "matched_ingredients": matched_synonyms,
+                "prominence": "Major" if is_major else "Minor / Trace",
             })
 
     return detected

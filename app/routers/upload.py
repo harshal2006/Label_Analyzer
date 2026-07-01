@@ -18,6 +18,7 @@ from app.models.analysis import AnalysisResult
 from app.models.upload import Upload
 from app.schemas.upload import ErrorResponse, IngredientAnalysis, UploadResponse
 from app.services import analysis_service, ocr_service, storage_service
+from app.services.health_score import calculate_health_score
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,32 @@ async def upload_image(
     except Exception as exc:
         logger.exception("Ingredient analysis failed (non-fatal): %s", exc)
         # Analysis failure is non-fatal — we still return OCR results
+
+    # ------------------------------------------------------------------
+    # 6b. Override LLM health score with deterministic rule-based score
+    # ------------------------------------------------------------------
+    if analysis_data is not None:
+        # Build a {name: "value unit"} dict from the parsed nutrient list
+        nutrient_dict = {
+            n["name"]: f'{n["value"]} {n.get("unit", "")}'.strip()
+            for n in nutrients
+            if "name" in n and "value" in n
+        }
+        ingredient_names = [
+            ing.get("name", "")
+            for ing in analysis_data.get("ingredients", [])
+            if ing.get("name")
+        ]
+        det_score, det_reasoning = calculate_health_score(
+            nutrient_dict, ingredient_names
+        )
+        analysis_data["overall_health_score"] = int(round(det_score))
+        analysis_data["health_score_reasoning"] = det_reasoning
+        # Re-validate the Pydantic model with the overridden score
+        try:
+            analysis_obj = IngredientAnalysis(**analysis_data)
+        except Exception as exc:
+            logger.warning("Failed to re-validate analysis after score override: %s", exc)
 
     # ------------------------------------------------------------------
     # 7. Persist analysis result

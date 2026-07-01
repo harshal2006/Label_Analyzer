@@ -13,39 +13,39 @@ from reportlab.platypus import TableStyle
 # ---------------------------------------------------------------------------
 # Colour Palette
 # ---------------------------------------------------------------------------
-PRIMARY = colors.HexColor("#4f46e5")
-PRIMARY_LIGHT = colors.HexColor("#818cf8")
-DARK_BG = colors.HexColor("#1a1a2e")
-ROW_ALT = colors.HexColor("#f0f0f5")
-TEXT_DARK = colors.HexColor("#1e1e2e")
-TEXT_SECONDARY = colors.HexColor("#6b7280")
-BORDER_MUTED = colors.HexColor("#d1d5db")
+PRIMARY = colors.HexColor("#C2553A")
+PRIMARY_LIGHT = colors.HexColor("#D4785C")
+DARK_BG = colors.HexColor("#1C1C1E")
+ROW_ALT = colors.HexColor("#F5F3F0")
+TEXT_DARK = colors.HexColor("#1C1C1E")
+TEXT_SECONDARY = colors.HexColor("#8E8E93")
+BORDER_MUTED = colors.HexColor("#D6D3CE")
 
 # Status flags
-RED = colors.HexColor("#dc2626")
-AMBER = colors.HexColor("#d97706")
-GREEN = colors.HexColor("#16a34a")
+RED = colors.HexColor("#C23838")
+AMBER = colors.HexColor("#D4883A")
+GREEN = colors.HexColor("#2D7D46")
 
 # Highlights
-ALLERGEN_BG = colors.HexColor("#fef2f2")
+ALLERGEN_BG = colors.HexColor("#FEF2F2")
 ALLERGEN_BORDER = RED
-GOAL_BG = colors.HexColor("#f8fafc")
+GOAL_BG = colors.HexColor("#FBF7F4")
 GOAL_BORDER = PRIMARY_LIGHT
-NO_ALLERGEN_BG = colors.HexColor("#f0fdf4")
+NO_ALLERGEN_BG = colors.HexColor("#F0FDF4")
 NO_ALLERGEN_BORDER = GREEN
 
 # How to Use section
-HOW_TO_USE_BG = colors.HexColor("#eff6ff")
-HOW_TO_USE_BORDER = colors.HexColor("#3b82f6")
+HOW_TO_USE_BG = colors.HexColor("#FBF7F4")
+HOW_TO_USE_BORDER = colors.HexColor("#C2553A")
 
 # Ingredient Details section
-INGREDIENT_BG = colors.HexColor("#f5f3ff")
-INGREDIENT_BORDER = colors.HexColor("#7c3aed")
+INGREDIENT_BG = colors.HexColor("#F5F3F0")
+INGREDIENT_BORDER = colors.HexColor("#6B6B6B")
 
 # Pie chart
-PIE_PROTEIN = colors.HexColor("#6366f1")  # indigo
-PIE_CARBS = colors.HexColor("#06b6d4")    # cyan
-PIE_FAT = colors.HexColor("#f59e0b")      # amber
+PIE_PROTEIN = colors.HexColor("#C2553A")  # terracotta
+PIE_CARBS = colors.HexColor("#3A7CA5")    # steel blue
+PIE_FAT = colors.HexColor("#D4883A")      # warm amber
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +85,17 @@ def get_report_styles() -> dict[str, ParagraphStyle]:
         spaceBefore=16,
         spaceAfter=10,
     )
+
+    if "SubsectionHeading" not in styles:
+        styles["SubsectionHeading"] = ParagraphStyle(
+            "SubsectionHeading",
+            parent=base_styles["Heading3"],
+            fontSize=14,
+            leading=18,
+            textColor=PRIMARY,
+            spaceBefore=12,
+            spaceAfter=8,
+        )
 
     styles["NutrientHeading"] = ParagraphStyle(
         "NutrientHeading",

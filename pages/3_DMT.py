@@ -49,11 +49,11 @@ def _auth_headers() -> dict:
 # Page header
 # ---------------------------------------------------------------------------
 st.markdown("""
-<div style="text-align: center; padding: 1.5rem 0 1rem;">
-    <h1 style="font-size: 2.6rem; font-weight: 800; color: var(--primary); margin-bottom: 0.3rem;">Data Management Tool</h1>
-    <p style="color: var(--text-color); font-size: 1.1rem; font-weight: 400;">View, download reports for, or delete your uploaded nutrition labels.</p>
+<div style="text-align: center; padding: 2rem 0 1rem;">
+    <h1 style="font-family: 'DM Sans', sans-serif; font-size: 2.4rem; font-weight: 700; color: #1C1C1E; margin-bottom: 0.4rem; letter-spacing: -0.01em;">Data Management Tool</h1>
+    <p style="color: #8E8E93; font-size: 1.05rem; font-weight: 400;">View, download reports for, or delete your uploaded nutrition labels.</p>
 </div>
-<div style="height: 2px; background: linear-gradient(90deg, transparent, #66BB6A, transparent); margin: 1rem 0 2rem 0;"></div>
+<div style="height: 1px; background: linear-gradient(90deg, transparent, rgba(28,28,30,0.08), rgba(194,85,58,0.2), rgba(28,28,30,0.08), transparent); margin: 1rem 0 2rem 0;"></div>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------

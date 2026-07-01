@@ -35,6 +35,7 @@ CRITICAL RULES FOR READING THE TEXT:
 2. Search aggressively: You MUST carefully search the entire text for the word "INGREDIENTS:" or similar markers. Do NOT assume the ingredient list is missing just because the text looks messy or you see a large nutrition table first. 
 
 The OCR text may contain Hindi/English mixed content, OCR errors, or unclear segments. Do your best to interpret it. If the text is in Hindi or Devanagari script, transliterate ingredient names to English before analysis.
+3. Merge synonyms/INS numbers: If the text lists an additive with its INS/E-number (e.g. "INS 950" or "E950") and its common name (e.g. "Acesulfame Potassium"), CRITICAL: MERGE them into a single ingredient entry formatted as "Common Name (INS/E Number)". DO NOT output two separate entries for the same compound.
 
 OCR TEXT:
 {ocr_text}

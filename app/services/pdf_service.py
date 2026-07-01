@@ -41,6 +41,8 @@ from app.utils.pdf_styles import (
     INGREDIENT_BORDER,
     NO_ALLERGEN_BG,
     NO_ALLERGEN_BORDER,
+    ROW_ALT,
+    BORDER_MUTED,
     PIE_CARBS,
     PIE_FAT,
     PIE_PROTEIN,
@@ -127,9 +129,9 @@ def _build_macro_pie(macro_split: dict, doc_width: float) -> Drawing:
     else:
         pie.data = [protein, carbs, fat]
         pie.labels = [
-            f"{protein:.0f}%",
-            f"{carbs:.0f}%",
-            f"{fat:.0f}%",
+            f"{protein:.1f}%",
+            f"{carbs:.1f}%",
+            f"{fat:.1f}%",
         ]
         pie.slices[0].fillColor = PIE_PROTEIN
         pie.slices[1].fillColor = PIE_CARBS
@@ -180,6 +182,8 @@ def generate_report_pdf(
     dv_flags: dict | None = None,
     allergens: list[dict] | None = None,
     macro_split: dict | None = None,
+    health_score: float | None = None,
+    health_reasoning: str | None = None,
 ) -> BytesIO:
     """Generate a styled PDF nutrition report and return it as a BytesIO buffer.
 
@@ -247,6 +251,38 @@ def generate_report_pdf(
     ))
     story.append(_build_divider(doc.width))
     story.append(Spacer(1, 16))
+
+    # ==================================================================
+    # PAGE 1 — Health Score Section
+    # ==================================================================
+    if health_score is not None:
+        story.append(Paragraph("Health Score", styles["SectionHeading"]))
+        
+        if health_score >= 8.0:
+            qualitative = "Excellent"
+            color_hex = GREEN.hexval()
+        elif health_score >= 6.0:
+            qualitative = "Good"
+            color_hex = GREEN.hexval()
+        elif health_score >= 4.0:
+            qualitative = "Fair"
+            color_hex = AMBER.hexval()
+        else:
+            qualitative = "Poor"
+            color_hex = RED.hexval()
+            
+        score_text = f"<font color='{color_hex}'><b>{health_score:.1f} / 10.0</b> \u2014 {qualitative}</font>"
+        
+        score_table = Table(
+            [[
+                Paragraph(score_text, styles["ProductTypeBadge"]),
+                Paragraph(health_reasoning or "No reasoning provided.", styles["ReportBody"])
+            ]],
+            colWidths=[doc.width * 0.35, doc.width * 0.65],
+        )
+        score_table.setStyle(get_highlight_box_style(ROW_ALT, BORDER_MUTED))
+        story.append(score_table)
+        story.append(Spacer(1, 20))
 
     # ==================================================================
     # PAGE 1 — Primary Goal Section
@@ -317,14 +353,15 @@ def generate_report_pdf(
     # ==================================================================
     story.append(Paragraph("Allergen Information", styles["SectionHeading"]))
     if allergens:
-        table_data = [["Allergen", "Matched Ingredient(s)"]]
+        table_data = [["Allergen", "Matched Ingredient(s)", "Prominence"]]
         for allergen_dict in allergens:
             alg_name = allergen_dict.get("allergen", "")
             matched_list = allergen_dict.get("matched_ingredients", [])
             matched_str = ", ".join(matched_list)
-            table_data.append([alg_name, matched_str])
+            prominence = allergen_dict.get("prominence", "Minor / Trace")
+            table_data.append([alg_name, matched_str, prominence])
             
-        col_widths = [doc.width * 0.40, doc.width * 0.60]
+        col_widths = [doc.width * 0.30, doc.width * 0.45, doc.width * 0.25]
         alg_table = Table(table_data, colWidths=col_widths, repeatRows=1)
         alg_table.setStyle(get_allergen_table_style(len(table_data)))
         story.append(alg_table)
@@ -415,27 +452,45 @@ def generate_report_pdf(
     story.append(Spacer(1, 10))
 
     if ingredient_details:
+        # Group ingredients by category
+        grouped_ingredients = {}
         for ing in ingredient_details:
-            name = ing.get("name", "Unknown")
-            source = ing.get("source", "Information not available.")
-            role = ing.get("role", "Information not available.")
+            cat = ing.get("category", "Other")
+            if cat not in grouped_ingredients:
+                grouped_ingredients[cat] = []
+            grouped_ingredients[cat].append(ing)
 
-            story.append(Paragraph(
-                f"<b>{name}</b>",
-                styles["NutrientHeading"],
-            ))
+        # Render each category
+        # Defined display order
+        display_order = ["Protein Sources", "Flavoring & Sweeteners", "Additives & Emulsifiers", "Other"]
+        
+        for category in display_order:
+            if category in grouped_ingredients:
+                story.append(Spacer(1, 10))
+                story.append(Paragraph(category, styles["SubsectionHeading"]))
+                story.append(Spacer(1, 5))
+                story.append(_build_divider(doc.width))
+                story.append(Spacer(1, 10))
+                
+                for ing in grouped_ingredients[category]:
+                    name = ing.get("name", "Unknown")
+                    source = ing.get("source", "Information not available.")
+                    role = ing.get("role", "Information not available.")
 
-            # "What it is" — source / origin
-            story.append(Paragraph("<b>What it is:</b>", styles["ReportLabel"]))
-            story.append(Paragraph(source, styles["ReportBody"]))
+                    story.append(Paragraph(
+                        f"<b>{name}</b>",
+                        styles["NutrientHeading"],
+                    ))
 
-            # "Why it's here" — functional role in this product
-            story.append(Paragraph("<b>Why it's here:</b>", styles["ReportLabel"]))
-            story.append(Paragraph(role, styles["ReportBody"]))
+                    # "What it is" — source / origin
+                    story.append(Paragraph("<b>What it is:</b>", styles["ReportLabel"]))
+                    story.append(Paragraph(source, styles["ReportBody"]))
 
-            story.append(Spacer(1, 6))
-            story.append(_build_divider(doc.width))
-            story.append(Spacer(1, 6))
+                    # "Why it's here" — functional role in this product
+                    story.append(Paragraph("<b>Why it's here:</b>", styles["ReportLabel"]))
+                    story.append(Paragraph(role, styles["ReportBody"]))
+
+                    story.append(Spacer(1, 10))
     else:
         story.append(Paragraph(
             "<i>No detailed ingredient information available for this report.</i>",

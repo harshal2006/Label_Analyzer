@@ -48,6 +48,7 @@ def _build_fallback(
     ingredient_details = [
         {
             "name": name,
+            "category": "Other",
             "source": "Commonly found in various foods and dietary sources.",
             "role": "Nutritional component typically found in packaged food products.",
         }
@@ -108,7 +109,8 @@ def get_report_insights(
         f'high-protein recovery supplement, with moderate carbohydrates and a notably low '
         f'sugar content suited for post-workout nutrition.").\n\n'
         f'2. "ingredient_details": For each ingredient listed above, provide:\n'
-        f'   - "name": the ingredient name exactly as given\n'
+        f'   - "name": the ingredient name exactly as given. CRITICAL: If the input list contains duplicate references to the same compound (e.g., an INS number and its common name), MERGE them into a single entry formatted as "Common Name (INS XXX)".\n'
+        f'   - "category": classify into EXACTLY ONE of these 4 buckets: "Protein Sources", "Flavoring & Sweeteners", "Additives & Emulsifiers", or "Other".\n'
         f'   - "source": a brief description of what it is and where it comes from '
         f'(natural/dietary origin, how it is produced)\n'
         f'   - "role": its specific functional role in THIS product '
@@ -122,7 +124,7 @@ def get_report_insights(
         f'Do NOT make medical claims. Stick to factual, label-based observations.\n\n'
         f'Return a JSON object with this exact shape:\n'
         f'{{"primary_goal": "...", '
-        f'"ingredient_details": [{{"name": "...", "source": "...", "role": "..."}}], '
+        f'"ingredient_details": [{{"name": "...", "category": "...", "source": "...", "role": "..."}}], '
         f'"how_to_use": {{"product_type": "...", "usage_instructions": "...", "cautions": "..."}}}}\n\n'
         f"Return ONLY the JSON object, nothing else."
     )
@@ -167,21 +169,63 @@ def get_report_insights(
 
         for item in raw_details:
             name = item.get("name", "Unknown")
+            cat = item.get("category", "Other")
+            if cat not in ("Protein Sources", "Flavoring & Sweeteners", "Additives & Emulsifiers", "Other"):
+                cat = "Other"
+            
             returned_names.add(name)
             ingredient_details.append({
                 "name": name,
+                "category": cat,
                 "source": item.get("source", "Information not available."),
                 "role": item.get("role", "Information not available."),
             })
 
-        # Ensure every requested ingredient has an entry
-        for name in ingredient_names:
-            if name not in returned_names:
+        import re
+        def _normalize(s: str) -> str:
+            s = re.sub(r'^[A-Za-z\s]+:\s*', '', s)
+            s = re.sub(r'\(?INS\s*\d+[a-z]*\)?', '', s, flags=re.IGNORECASE)
+            s = re.sub(r'\(?E\s*\d+[a-z]*\)?', '', s, flags=re.IGNORECASE)
+            return s.lower().strip()
+
+        returned_normalized = [_normalize(rn) for rn in returned_names]
+
+        # Ensure every requested ingredient has an entry (unless merged)
+        for original_name in ingredient_names:
+            orig_norm = _normalize(original_name)
+            # Check if it was merged by matching normalized substrings
+            was_merged = False
+            if len(orig_norm) > 3:
+                for rn in returned_normalized:
+                    if len(rn) > 3 and (orig_norm in rn or rn in orig_norm):
+                        was_merged = True
+                        break
+            
+            if original_name not in returned_names and not was_merged:
                 ingredient_details.append({
-                    "name": name,
+                    "name": original_name,
+                    "category": "Other",
                     "source": "Information not available.",
                     "role": "Information not available.",
                 })
+
+        # Safeguard: drop any "Information not available" entry if it's a duplicate of a populated entry
+        final_details = []
+        for d in ingredient_details:
+            if d["source"] == "Information not available." and d["role"] == "Information not available.":
+                norm_d = _normalize(d["name"])
+                is_dup = False
+                for other in ingredient_details:
+                    if other is not d and (other["source"] != "Information not available." or other["role"] != "Information not available."):
+                        norm_other = _normalize(other["name"])
+                        if len(norm_d) > 3 and (norm_d in norm_other or norm_other in norm_d):
+                            is_dup = True
+                            break
+                if is_dup:
+                    continue
+            final_details.append(d)
+        
+        ingredient_details = final_details
 
         # --- Extract how_to_use ---
         how_to_use = parsed_json.get("how_to_use", dict(_FALLBACK_HOW_TO_USE))
